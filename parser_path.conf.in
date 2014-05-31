@@ -1,0 +1,6 @@
+# usage
+# parserlib:directory_path
+
+parserlib:/usr/etc/package-manager/parserlib/
+metadataparser:/usr/etc/package-manager/parserlib/metadata/
+categoryparser:/usr/etc/package-manager/parserlib/category/

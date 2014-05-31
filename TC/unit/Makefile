@@ -1,0 +1,105 @@
+CC ?= gcc
+
+TARGETS = utc_ApplicationFW_pkgmgrinfo_create_certinfo_set_handle_func \
+	utc_ApplicationFW_pkgmgrinfo_delete_certinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_destroy_certinfo_set_handle_func \
+	utc_ApplicationFW_pkgmgrinfo_save_certinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_cert_value_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_create_certinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_destroy_certinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_destroy_pkginfo_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_author_email_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_author_href_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_author_name_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_cert_value_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_description_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_icon_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_installed_storage_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_install_location_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_label_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_list_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_package_size_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_installed_time_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_pkginfo_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_pkgname_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_type_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_get_version_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_is_accessible_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_is_preload_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_is_readonly_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_is_removable_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_filter_add_bool_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_filter_add_int_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_filter_add_string_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_filter_count_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_filter_create_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_filter_destroy_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_filter_foreach_pkginfo_func \
+	utc_ApplicationFW_pkgmgrinfo_pkginfo_load_certinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_destroy_appinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_appid_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_pkgname_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_appinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_apptype_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_component_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_exec_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_icon_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_label_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_list_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_installed_list_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_is_autorestart_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_hwacceleration_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_is_multiple_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_is_nodisplay_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_is_onboot_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_is_taskmanage_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_foreach_category_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_foreach_appcontrol_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_uri_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_mime_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_get_operation_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_filter_add_bool_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_filter_add_int_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_filter_add_string_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_filter_count_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_filter_create_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_filter_destroy_func \
+	utc_ApplicationFW_pkgmgrinfo_appinfo_filter_foreach_appinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_create_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_destroy_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_save_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_author_to_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_description_to_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_icon_to_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_install_location_to_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_label_to_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_preload_to_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_removable_to_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_size_to_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_type_to_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgrinfo_set_version_to_pkgdbinfo_func \
+	utc_ApplicationFW_pkgmgr_parser_check_manifest_validation_func \
+	utc_ApplicationFW_pkgmgr_parser_get_manifest_file_func \
+	utc_ApplicationFW_pkgmgr_parser_parse_manifest_for_installation_func \
+	utc_ApplicationFW_pkgmgr_parser_parse_manifest_for_uninstallation_func \
+	utc_ApplicationFW_pkgmgr_parser_parse_manifest_for_upgrade_func
+
+PKGS = glib-2.0 dlog pkgmgr-info pkgmgr-parser
+
+LDFLAGS = `pkg-config --libs $(PKGS)`
+LDFLAGS += $(TET_ROOT)/lib/tet3/tcm_s.o
+LDFLAGS += -L$(TET_ROOT)/lib/tet3 -ltcm_s
+LDFLAGS += -L$(TET_ROOT)/lib/tet3 -lapi_s
+LDFLAGS += -L/usr/lib -lpthread
+
+CFLAGS = -I. `pkg-config --cflags $(PKGS)`
+CFLAGS += -I$(TET_ROOT)/inc/tet3
+CFLAGS += -Wall
+
+all: $(TARGETS)
+
+$(TARGETS): %: %.c
+	$(CC) -o $@ $< $(CFLAGS) $(LDFLAGS)
+
+clean:
+	rm -f $(TARGETS)

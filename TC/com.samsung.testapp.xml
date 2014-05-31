@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns="http://tizen.org/ns/packages" package="com.samsung.testapp" version="0.1.45" size="15" install-location="internal-only">
+	<label>Test App Global Label</label>
+	<author email="shobhit.s@samsung.com" href="www.samsung.com">Shobhit Srivastava</author>
+	<description>Test App Global Description</description>
+	<ui-application appid="com.samsung.uitestapp" exec="/opt/apps/com.samsung.testapp/bin/uitestapp" nodisplay="false" multiple="false" type="capp" taskmanage="true" hw-acceleration="use-system-setting">
+		<icon>com.samsung.uitestapp.png</icon>
+		<icon xml:lang="en-us">com.samsung.uitestapp.png in English US</icon>
+		<label>Test Ui App Localized Label</label>
+		<label xml:lang="en-us">Test Ui App Local Label in English US</label>
+		<category name="http://tizen.org/category/launcher"/>
+		<category name="http://tizen.org/category/calculator"/>
+		<category name="http://tizen.org/category/calendar"/>
+		<category name="http://tizen.org/category/homescreen"/>
+		<category name="http://tizen.org/category/alarm"/>
+		<category name="http://tizen.org/category/search"/>
+		<application-service>
+			<operation name="abcd"/>
+			<operation name="efgh"/>
+			<operation name="uvwx"/>
+		</application-service>
+		<app-control>
+			<operation name="SEARCH"/>
+			<operation name="EDIT"/>
+			<uri name="http"/>
+			<uri name="ftp"/>
+			<mime name="mp3"/>
+		</app-control>
+		<app-control>
+			<operation name="VIEW"/>
+			<operation name="DELETE"/>
+			<uri name="mtp"/>
+			<uri name="https"/>
+			<mime name="jpg"/>
+			<mime name="png"/>
+		</app-control>
+	</ui-application>
+	<service-application appid="com.samsung.svctestapp" exec="/opt/apps/com.samsung.testapp/bin/svctestapp" type="webapp" on-boot="true" auto-restart="false">
+		<icon>com.samsung.svctestapp.jpg</icon>
+		<icon xml:lang="ko-kr">com.samsung.svctestapp.jpg in Korean</icon>
+		<label>Test Svc App Localized Label</label>
+		<label xml:lang="en-us">Test Svc App Local Label in English US</label>
+		<category name="http://tizen.org/category/browser"/>
+		<category name="http://tizen.org/category/default"/>
+		<app-control>
+			<operation name="VIEW"/>
+			<operation name="DELETE"/>
+			<uri name="mtp"/>
+			<uri name="https"/>
+			<mime name="jpg"/>
+			<mime name="png"/>
+		</app-control>
+	</service-application>
+</manifest>

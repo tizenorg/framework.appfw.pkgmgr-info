@@ -1,0 +1,19 @@
+# usage
+# flag : bit flag value for index, flag overlapping is forbidden
+# type : type of plugin parser, three types of plugin are supported "tag, metadata, category"
+# name : name of attribute on xml,
+# path : directory path for plugin library
+
+flag="0x00000001":type="tag":name="shortcut-list":path="/usr/etc/package-manager/parserlib/libshortcut-list.so"
+flag="0x00000002":type="tag":name="livebox":path="/usr/etc/package-manager/parserlib/liblivebox.so"
+flag="0x00000004":type="tag":name="account":path="/usr/etc/package-manager/parserlib/libaccount.so"
+flag="0x00000008":type="tag":name="notifications":path="/usr/etc/package-manager/parserlib/libnotifications.so"
+flag="0x00000010":type="tag":name="privileges":path="/usr/etc/package-manager/parserlib/libprivileges.so"
+flag="0x00000020":type="tag":name="ime":path="/usr/etc/package-manager/parserlib/libime.so"
+flag="0x00000040":type="metadata":name="http://developer.samsung.com/tizen/metadata/font":path="/usr/etc/package-manager/parserlib/metadata/libfont.so"
+flag="0x00000080":type="metadata":name="http://developer.samsung.com/tizen/metadata/sticker":path="/usr/etc/package-manager/parserlib/metadata/libsticker.so"
+flag="0x00000100":type="metadata":name="http://developer.samsung.com/tizen/metadata/ttsengine":path="/usr/etc/package-manager/parserlib/metadata/libttsengine.so"
+flag="0x00000200":type="metadata":name="http://developer.samsung.com/tizen/metadata/downloadable_filters":path="/usr/etc/package-manager/parserlib/metadata/libdownloadable_filters.so"
+flag="0x00000400":type="metadata":name="http://developer.samsung.com/tizen/metadata/dictionary":path="/usr/etc/package-manager/parserlib/metadata/libdictionary.so"
+flag="0x00000800":type="category":name="http://tizen.org/category/antivirus":path="/usr/etc/package-manager/parserlib/category/libantivirus.so"
+flag="0x00001000":type="metadata":name="http://developer.samsung.com/tizen/metadata/profile":path="/usr/etc/package-manager/parserlib/metadata/libtheme.so"
