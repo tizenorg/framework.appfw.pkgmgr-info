@@ -1,6 +1,6 @@
 Name:       pkgmgr-info
 Summary:    Packager Manager infomation api for package
-Version:    0.0.172
+Version:    0.0.230
 Release:    1
 Group:      Application Framework/Package Management
 License:    Apache-2.0
@@ -10,9 +10,11 @@ BuildRequires:	pkgconfig(dlog)
 BuildRequires:	pkgconfig(vconf)
 BuildRequires:	pkgconfig(sqlite3)
 BuildRequires:	pkgconfig(db-util)
-BuildRequires:pkgconfig(libxml-2.0)
+BuildRequires:	pkgconfig(libxml-2.0)
 BuildRequires:	pkgconfig(dbus-1)
 BuildRequires:	pkgconfig(dbus-glib-1)
+BuildRequires:	pkgconfig(journal)
+BuildRequires:	pkgconfig(openssl)
 
 %description
 Packager Manager infomation api for packaging
@@ -48,8 +50,12 @@ Dev package for libpkgmgr-parser
 
 %if 0%{?tizen_build_binary_release_type_eng}
 export CFLAGS="$CFLAGS -DTIZEN_ENGINEER_MODE"
-export CXXFLAGS="$CXXFLAGS ?DTIZEN_ENGINEER_MODE"
+export CXXFLAGS="$CXXFLAGS -DTIZEN_ENGINEER_MODE"
 export FFLAGS="$FFLAGS -DTIZEN_ENGINEER_MODE"
+%endif
+
+%if "%{?tizen_profile_name}" == "wearable"
+export CFLAGS="$CFLAGS -D_APPFW_FEATURE_PROFILE_WEARABLE"
 %endif
 
 %cmake .
@@ -85,10 +91,14 @@ chsmack -a '_' /usr/etc/package-manager
 %defattr(-,root,root,-)
 %{_libdir}/libpkgmgr-info.so.*
 /usr/share/license/%{name}
+%attr(0755,root,root) /opt/etc/dump.d/module.d/dump_pkgmgr.sh
 
 %files devel
 %defattr(-,root,root,-)
 %{_includedir}/pkgmgr-info.h
+%{_includedir}/pkgmgrinfo_basic.h
+%{_includedir}/pkgmgrinfo_feature.h
+%{_includedir}/pkgmgrinfo_type.h
 %{_libdir}/pkgconfig/pkgmgr-info.pc
 %{_libdir}/libpkgmgr-info.so
 
@@ -96,7 +106,6 @@ chsmack -a '_' /usr/etc/package-manager
 %manifest pkgmgr-parser.manifest
 %defattr(-,root,root,-)
 %{_libdir}/libpkgmgr_parser.so.*
-%{_prefix}/etc/package-manager/preload/preload_list.txt
 %{_prefix}/etc/package-manager/preload/manifest.xsd
 %{_prefix}/etc/package-manager/preload/xml.xsd
 %{_prefix}/etc/package-manager/parser_path.conf
@@ -106,6 +115,7 @@ chsmack -a '_' /usr/etc/package-manager
 %files parser-devel
 %defattr(-,root,root,-)
 %{_includedir}/pkgmgr/pkgmgr_parser.h
+%{_includedir}/pkgmgr/pkgmgr_parser_feature.h
 %{_includedir}/pkgmgr/pkgmgr_parser_db.h
 %{_libdir}/pkgconfig/pkgmgr-parser.pc
 %{_libdir}/libpkgmgr_parser.so

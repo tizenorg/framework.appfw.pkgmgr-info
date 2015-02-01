@@ -27,7 +27,7 @@
 
 #include <pkgmgr_parser.h>
 #include "pkgmgr_parser_signature.h"
-#include "pkgmgr-info-debug.h"
+#include "pkgmgrinfo_debug.h"
 
 #ifdef LOG_TAG
 #undef LOG_TAG
@@ -76,10 +76,35 @@ typedef struct _mdm_data {
 } mdm_data_t;
 
 #define LIBMDM_PATH "libmdm.so.1"
-#define BUFMAX 1024*128
 
 #define ASCII(s) (const char *)s
 #define XMLCHAR(s) (const xmlChar *)s
+
+static int __get_attribute(xmlTextReaderPtr reader, char *attribute, const char **xml_attribute)
+{
+	if(xml_attribute == NULL){
+		_LOGE("@xml_attribute argument is NULL!!");
+		return -1;
+	}
+	xmlChar	*attrib_val = xmlTextReaderGetAttribute(reader,XMLCHAR(attribute));
+	if(attrib_val)
+		*xml_attribute = ASCII(attrib_val);
+
+	return 0;
+}
+
+static int  __get_value(xmlTextReaderPtr reader, const char **xml_value)
+{
+	if(xml_value == NULL){
+		_LOGE("@xml_value is NULL!!");
+		return -1;
+	}
+	xmlChar *value = xmlTextReaderValue(reader);
+	if(value)
+		*xml_value = ASCII(value);
+
+	return 0;
+}
 
 static int _ri_next_child_element(xmlTextReaderPtr reader, int depth)
 {
@@ -115,84 +140,56 @@ static void _ri_free_transform(transform_x *transform)
 {
 	if (transform == NULL)
 		return;
-	if (transform->algorithm) {
-	        free((void *)transform->algorithm);
-	        transform->algorithm = NULL;
-	}
-	free((void*)transform);
-	transform = NULL;
+	FREE_AND_NULL(transform->algorithm);
+	FREE_AND_NULL(transform);
 }
 
 static void _ri_free_cannonicalizationmethod(cannonicalizationmethod_x *cannonicalizationmethod)
 {
 	if (cannonicalizationmethod == NULL)
 		return;
-	if (cannonicalizationmethod->algorithm) {
-	        free((void *)cannonicalizationmethod->algorithm);
-	        cannonicalizationmethod->algorithm = NULL;
-	}
-	free((void*)cannonicalizationmethod);
-	cannonicalizationmethod = NULL;
+	FREE_AND_NULL(cannonicalizationmethod->algorithm);
+	FREE_AND_NULL(cannonicalizationmethod);
 }
 
 static void _ri_free_signaturemethod(signaturemethod_x *signaturemethod)
 {
 	if (signaturemethod == NULL)
 		return;
-	if (signaturemethod->algorithm) {
-	        free((void *)signaturemethod->algorithm);
-	        signaturemethod->algorithm = NULL;
-	}
-	free((void*)signaturemethod);
-	signaturemethod = NULL;
+	FREE_AND_NULL(signaturemethod->algorithm);
+	FREE_AND_NULL(signaturemethod);
 }
 
 static void _ri_free_digestmethod(digestmethod_x *digestmethod)
 {
 	if (digestmethod == NULL)
 		return;
-	if (digestmethod->algorithm) {
-	        free((void *)digestmethod->algorithm);
-	        digestmethod->algorithm = NULL;
-	}
-	free((void*)digestmethod);
-	digestmethod = NULL;
+	FREE_AND_NULL(digestmethod->algorithm);
+	FREE_AND_NULL(digestmethod);
 }
 
 static void _ri_free_digestvalue(digestvalue_x *digestvalue)
 {
 	if (digestvalue == NULL)
 		return;
-	if (digestvalue->text) {
-	        free((void *)digestvalue->text);
-	        digestvalue->text = NULL;
-	}
-	free((void*)digestvalue);
-	digestvalue = NULL;
+	FREE_AND_NULL(digestvalue->text);
+	FREE_AND_NULL(digestvalue);
 }
 
 static void _ri_free_signaturevalue(signaturevalue_x *signaturevalue)
 {
 	if (signaturevalue == NULL)
 		return;
-	if (signaturevalue->text) {
-	        free((void *)signaturevalue->text);
-	        signaturevalue->text = NULL;
-	}
-	free((void*)signaturevalue);
-	signaturevalue = NULL;
+	FREE_AND_NULL(signaturevalue->text);
+	FREE_AND_NULL(signaturevalue);
 }
 
 static void _ri_free_x509certificate(x509certificate_x *x509certificate)
 {
 	if (x509certificate == NULL)
 		return;
-	if (x509certificate->text) {
-	        free((void *)x509certificate->text);
-	        x509certificate->text = NULL;
-	}
-	free((void*)x509certificate);
-	x509certificate = NULL;
+	FREE_AND_NULL(x509certificate->text);
+	FREE_AND_NULL(x509certificate);
 }
 
 static void _ri_free_x509data(x509data_x *x509data)
@@ -208,8 +205,7 @@ static void _ri_free_x509data(x509data_x *x509data)
 		        x509certificate = tmp;
 		}
 	}
-	free((void*)x509data);
-	x509data = NULL;
+	FREE_AND_NULL(x509data);
 }
 
 static void _ri_free_keyinfo(keyinfo_x *keyinfo)
@@ -225,8 +221,7 @@ static void _ri_free_keyinfo(keyinfo_x *keyinfo)
 		        x509data = tmp;
 		}
 	}
-	free((void*)keyinfo);
-	keyinfo = NULL;
+	FREE_AND_NULL(keyinfo);
 }
 
 static void _ri_free_transforms(transforms_x *transforms)
@@ -242,8 +237,7 @@ static void _ri_free_transforms(transforms_x *transforms)
 		        transform = tmp;
 		}
 	}
-	free((void*)transforms);
-	transforms = NULL;
+	FREE_AND_NULL(transforms);
 }
 
 static void _ri_free_reference(reference_x *reference)
@@ -277,8 +271,7 @@ static void _ri_free_reference(reference_x *reference)
 		        transforms = tmp;
 		}
 	}
-	free((void*)reference);
-	reference = NULL;
+	FREE_AND_NULL(reference);
 }
 
 static void _ri_free_signedinfo(signedinfo_x *signedinfo)
@@ -312,22 +305,15 @@ static void _ri_free_signedinfo(signedinfo_x *signedinfo)
 		        reference = tmp;
 		}
 	}
-	free((void*)signedinfo);
-	signedinfo = NULL;
+	FREE_AND_NULL(signedinfo);
 }
 
 void _ri_free_signature_xml(signature_x *sigx)
 {
 	if (sigx == NULL)
 		return;
-	if (sigx->id) {
-	        free((void *)sigx->id);
-	        sigx->id = NULL;
-	}
-	if (sigx->xmlns) {
-	        free((void *)sigx->xmlns);
-	        sigx->xmlns = NULL;
-	}
+	FREE_AND_NULL(sigx->id);
+	FREE_AND_NULL(sigx->xmlns);
 	if (sigx->signedinfo) {
 		signedinfo_x *signedinfo = sigx->signedinfo;
 		signedinfo_x *tmp = NULL;
@@ -356,30 +342,44 @@ void _ri_free_signature_xml(signature_x *sigx)
 		}
 	}
 	/*Object will be freed when it will be parsed in future*/
-	free((void*)sigx);
-	sigx = NULL;
+	FREE_AND_NULL(sigx);
 }
 
 static int _ri_process_digestmethod(xmlTextReaderPtr reader, digestmethod_x *digestmethod)
 {
-	if (xmlTextReaderGetAttribute(reader, XMLCHAR("Algorithm")))
-		digestmethod->algorithm = ASCII(xmlTextReaderGetAttribute(reader, XMLCHAR("Algorithm")));
-	return 0;
+	int ret = 0;
+	ret = __get_attribute(reader,"Algorithm",&digestmethod->algorithm);
+	if(ret != 0){
+		_LOGE("@Error in getting the attribute value");
+	}else{
+		_LOGD("DigestMethod Algo is %s\n",digestmethod->algorithm);
+	}
+	return ret;
+
 }
 
 static int _ri_process_digestvalue(xmlTextReaderPtr reader, digestvalue_x *digestvalue)
 {
+	int ret = -1;
 	xmlTextReaderRead(reader);
-	if (xmlTextReaderValue(reader))
-		digestvalue->text = ASCII(xmlTextReaderValue(reader));
-	return 0;
+
+	ret = __get_value(reader,&digestvalue->text);
+	if(ret != 0){
+		_LOGE("@Error in getting the value");
+	}
+	return ret;
 }
 
 static int _ri_process_transform(xmlTextReaderPtr reader, transform_x *transform)
 {
-	if (xmlTextReaderGetAttribute(reader, XMLCHAR("Algorithm")))
-		transform->algorithm = ASCII(xmlTextReaderGetAttribute(reader, XMLCHAR("Algorithm")));
-	return 0;
+	int ret = 0;
+	ret = __get_attribute(reader,"Algorithm",&transform->algorithm);
+	if(ret != 0){
+		_LOGE("@Error in getting the attribute value");
+	}else{
+		_LOGD("Transform Algo is %s\n",transform->algorithm);
+	}
+	return ret;
 }
 
 static int _ri_process_transforms(xmlTextReaderPtr reader, transforms_x *transforms)
@@ -411,25 +411,34 @@ static int _ri_process_transforms(xmlTextReaderPtr reader, transforms_x *transfo
 		if (ret < 0)
 			return ret;
 	}
-	if (transforms->transform) {
-		LISTHEAD(transforms->transform, tmp1);
-		transforms->transform = tmp1;
-	}
+
+	SAFE_LISTHEAD(transforms->transform, tmp1);
+
 	return ret;
 }
 
 static int _ri_process_cannonicalizationmethod(xmlTextReaderPtr reader, cannonicalizationmethod_x *cannonicalizationmethod)
 {
-	if (xmlTextReaderGetAttribute(reader, XMLCHAR("Algorithm")))
-		cannonicalizationmethod->algorithm = ASCII(xmlTextReaderGetAttribute(reader, XMLCHAR("Algorithm")));
-	return 0;
+	int ret = 0;
+	ret = __get_attribute(reader,"Algorithm",&cannonicalizationmethod->algorithm);
+	if(ret != 0){
+		_LOGE("@Error in getting the attribute value");
+	}else{
+		_LOGD("Cannonicalization-method Algo is %s\n",cannonicalizationmethod->algorithm);
+	}
+	return ret;
 }
 
 static int _ri_process_signaturemethod(xmlTextReaderPtr reader, signaturemethod_x *signaturemethod)
 {
-	if (xmlTextReaderGetAttribute(reader, XMLCHAR("Algorithm")))
-		signaturemethod->algorithm = ASCII(xmlTextReaderGetAttribute(reader, XMLCHAR("Algorithm")));
-	return 0;
+	int ret = 0;
+	ret = __get_attribute(reader,"Algorithm",&signaturemethod->algorithm);
+	if(ret != 0){
+		_LOGE("@Error in getting the attribute value");
+	}else{
+		_LOGD("Signature-method Algo is %s\n",signaturemethod->algorithm);
+	}
+	return ret;
 }
 
 static int _ri_process_reference(xmlTextReaderPtr reader, reference_x *reference)
@@ -441,8 +450,12 @@ static int _ri_process_reference(xmlTextReaderPtr reader, reference_x *reference
 	digestvalue_x *tmp2 = NULL;
 	transforms_x *tmp3 = NULL;
 
-	if (xmlTextReaderGetAttribute(reader, XMLCHAR("URI")))
-		reference->uri = ASCII(xmlTextReaderGetAttribute(reader, XMLCHAR("URI")));
+	ret = __get_attribute(reader,"URI",&reference->uri);
+	if(ret != 0){
+		_LOGE("@Error in getting the attribute value");
+		return ret;
+	}
+	_LOGD("Refrence-uri is %s\n",reference->uri);
 
 	depth = xmlTextReaderDepth(reader);
 	while ((ret = _ri_next_child_element(reader, depth))) {
@@ -482,29 +495,23 @@ static int _ri_process_reference(xmlTextReaderPtr reader, reference_x *reference
 		if (ret < 0)
 			return ret;
 	}
-	if (reference->digestmethod) {
-		LISTHEAD(reference->digestmethod, tmp1);
-		reference->digestmethod = tmp1;
-	}
-	if (reference->digestvalue) {
-		LISTHEAD(reference->digestvalue, tmp2);
-		reference->digestvalue = tmp2;
-	}
-	if (reference->transforms) {
-		LISTHEAD(reference->transforms, tmp3);
-		reference->transforms = tmp3;
-	}
+
+	SAFE_LISTHEAD(reference->digestmethod, tmp1);
+	SAFE_LISTHEAD(reference->digestvalue, tmp2);
+	SAFE_LISTHEAD(reference->transforms, tmp3);
+
 	return ret;
 }
 
 static int _ri_process_x509certificate(xmlTextReaderPtr reader, x509certificate_x *x509certificate)
 {
+	int ret = -1;
 	xmlTextReaderRead(reader);
-	if (xmlTextReaderValue(reader)) {
-		x509certificate->text = ASCII(xmlTextReaderValue(reader));
-		// _d_msg(DEBUG_INFO, "certlen=%d, x509certificate : %s", strlen(x509certificate->text), x509certificate->text);
+	ret = __get_value(reader,&x509certificate->text);
+	if(ret != 0){
+		_LOGE("@Error in getting the value");
 	}
-	return 0;
+	return ret;
 }
 
 static int _ri_process_x509data(xmlTextReaderPtr reader, x509data_x *x509data)
@@ -536,20 +543,11 @@ static int _ri_process_x509data(xmlTextReaderPtr reader, x509data_x *x509data)
 		if (ret < 0)
 			return ret;
 	}
-	if (x509data->x509certificate) {
-		LISTHEAD(x509data->x509certificate, tmp1);
-		x509data->x509certificate = tmp1;
-	}
+
+	SAFE_LISTHEAD(x509data->x509certificate, tmp1);
+
 	return ret;
 }
-
-#if 0
-static int _ri_process_object(xmlTextReaderPtr reader, object_x *object)
-{
-	/*To be parsed later*/
-	return 0;
-}
-#endif
 
 static int _ri_process_keyinfo(xmlTextReaderPtr reader, keyinfo_x *keyinfo)
 {
@@ -580,21 +578,21 @@ static int _ri_process_keyinfo(xmlTextReaderPtr reader, keyinfo_x *keyinfo)
 		if (ret < 0)
 			return ret;
 	}
-	if (keyinfo->x509data) {
-		LISTHEAD(keyinfo->x509data, tmp1);
-		keyinfo->x509data = tmp1;
-	}
+
+	SAFE_LISTHEAD(keyinfo->x509data, tmp1);
+
 	return ret;
 }
 
 static int _ri_process_signaturevalue(xmlTextReaderPtr reader, signaturevalue_x *signaturevalue)
 {
+	int ret = 0;
 	xmlTextReaderRead(reader);
-	if (xmlTextReaderValue(reader)) {
-		signaturevalue->text = ASCII(xmlTextReaderValue(reader));
-		// _d_msg(DEBUG_INFO, "siglen=%d SignatureValue %s", strlen(signaturevalue->text), signaturevalue->text);
+	ret = __get_value(reader,&signaturevalue->text);
+	if(ret != 0){
+		_LOGE("@Error in getting the value");
 	}
-	return 0;
+	return ret;
 }
 
 static int _ri_process_signedinfo(xmlTextReaderPtr reader, signedinfo_x *signedinfo)
@@ -644,18 +642,11 @@ static int _ri_process_signedinfo(xmlTextReaderPtr reader, signedinfo_x *signedi
 		if (ret < 0)
 			return ret;
 	}
-	if (signedinfo->cannonicalizationmethod) {
-		LISTHEAD(signedinfo->cannonicalizationmethod, tmp1);
-		signedinfo->cannonicalizationmethod = tmp1;
-	}
-	if (signedinfo->signaturemethod) {
-		LISTHEAD(signedinfo->signaturemethod, tmp2);
-		signedinfo->signaturemethod = tmp2;
-	}
-	if (signedinfo->reference) {
-		LISTHEAD(signedinfo->reference, tmp3);
-		signedinfo->reference = tmp3;
-	}
+
+	SAFE_LISTHEAD(signedinfo->cannonicalizationmethod, tmp1);
+	SAFE_LISTHEAD(signedinfo->signaturemethod, tmp2);
+	SAFE_LISTHEAD(signedinfo->reference, tmp3);
+
 	return ret;
 }
 
@@ -718,22 +709,12 @@ static int _ri_process_sign(xmlTextReaderPtr reader, signature_x *sigx)
 		if (ret < 0)
 			return ret;
 	}
-	if (sigx->signedinfo) {
-		LISTHEAD(sigx->signedinfo, tmp1);
-		sigx->signedinfo = tmp1;
-	}
-	if (sigx->signaturevalue) {
-		LISTHEAD(sigx->signaturevalue, tmp2);
-		sigx->signaturevalue = tmp2;
-	}
-	if (sigx->keyinfo) {
-		LISTHEAD(sigx->keyinfo, tmp3);
-		sigx->keyinfo = tmp3;
-	}
-	if (sigx->object) {
-		LISTHEAD(sigx->object, tmp4);
-		sigx->object = tmp4;
-	}
+
+	SAFE_LISTHEAD(sigx->signedinfo, tmp1);
+	SAFE_LISTHEAD(sigx->signaturevalue, tmp2);
+	SAFE_LISTHEAD(sigx->keyinfo, tmp3);
+	SAFE_LISTHEAD(sigx->object, tmp4);
+
 	return ret;
 }
 
@@ -749,10 +730,20 @@ static int _ri_process_signature(xmlTextReaderPtr reader, signature_x *sigx)
 			return -1;
 		}
 		if (!strcmp(ASCII(node), "Signature")) {
-			if (xmlTextReaderGetAttribute(reader, XMLCHAR("Id")))
-				sigx->id = ASCII(xmlTextReaderGetAttribute(reader, XMLCHAR("Id")));
-			if (xmlTextReaderGetAttribute(reader, XMLCHAR("xmlns")))
-				sigx->xmlns = ASCII(xmlTextReaderGetAttribute(reader, XMLCHAR("xmlns")));
+			ret = __get_attribute(reader,"Id",&sigx->id);
+			if(ret != 0){
+				_LOGE("@Error in getting the attribute value");
+				return ret;
+			}
+			_LOGD("sigx-id is %s\n",sigx->id);
+
+			ret = __get_attribute(reader,"xmlns",&sigx->xmlns);
+			if(ret != 0){
+				_LOGE("@Error in getting the attribute value");
+				return ret;
+			}
+			_LOGD("sigx-xmlns is %s\n",sigx->xmlns);
+
 			ret = _ri_process_sign(reader, sigx);
 		} else {
 			// _d_msg(DEBUG_ERR, "No Signature element found\n");
@@ -954,6 +945,8 @@ catch:
 int __ps_check_mdm_policy(manifest_x * mfx, MDM_ACTION_TYPE action)
 {
 	int ret = PM_MDM_R_OK;
+
+#ifdef TIZEN_MDM_ENABLE
 	retvm_if(mfx == NULL, PM_MDM_R_OK, "Manifest pointer is NULL");
 
 	char *errmsg = NULL;
@@ -1020,6 +1013,7 @@ int __ps_check_mdm_policy(manifest_x * mfx, MDM_ACTION_TYPE action)
 catch:
 
 	dlclose(handle);
+#endif
 
 	return ret;
 }

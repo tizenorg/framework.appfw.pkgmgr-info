@@ -26,8 +26,8 @@
 #include <dbus/dbus.h>
 #include <dbus/dbus-glib-lowlevel.h>
 
-#include "pkgmgr-info-internal.h"
-#include "pkgmgr-info-debug.h"
+#include "pkgmgrinfo_private.h"
+#include "pkgmgrinfo_debug.h"
 #include "pkgmgr-info.h"
 
 #ifdef LOG_TAG
@@ -62,7 +62,6 @@ static int __get_pkg_location(const char *pkgid)
 /* pkgmgrinfo client start*/
 API pkgmgrinfo_client *pkgmgrinfo_client_new(pkgmgrinfo_client_type ctype)
 {
-	int ret = 0;
 	char *errmsg = NULL;
 	void *pc = NULL;
 	void *handle = NULL;
@@ -72,13 +71,14 @@ API pkgmgrinfo_client *pkgmgrinfo_client_new(pkgmgrinfo_client_type ctype)
 	retvm_if(!handle, NULL, "dlopen() failed. [%s]", dlerror());
 
 	__pkgmgr_client_new = dlsym(handle, "pkgmgr_client_new");
+	retvm_if(__pkgmgr_client_new == NULL, NULL, "__pkgmgr_client_new() failed");
+
 	errmsg = dlerror();
-	tryvm_if((errmsg != NULL) || (__pkgmgr_client_new == NULL), ret = PMINFO_R_ERROR, "dlsym() failed. [%s]", errmsg);
+	retvm_if(errmsg != NULL, NULL, "dlsym() failed. [%s]", errmsg);
 
 	pc = __pkgmgr_client_new(ctype);
-	tryvm_if(pc == NULL, ret = PMINFO_R_ERROR, "pkgmgr_client_new failed.");
 
-catch:
+//catch:
 //	dlclose(handle);
 	return (pkgmgrinfo_client *) pc;
 }

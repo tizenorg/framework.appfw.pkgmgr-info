@@ -25,7 +25,7 @@ message(STATUS "version/major : ${VERSION} / ${VERSION_MAJOR}")
 ### Get required CFLAGS, LDFLAGS from pkg-config
 
 include(FindPkgConfig)
-pkg_check_modules(parser_pkgs REQUIRED dlog libxml-2.0 glib-2.0 sqlite3 db-util vconf)
+pkg_check_modules(parser_pkgs REQUIRED dlog libxml-2.0 glib-2.0 sqlite3 db-util vconf journal)
 
 foreach(flag ${parser_pkgs_CFLAGS})
 	set(parser_pkgs_CFLAGS_str "${parser_pkgs_CFLAGS_str} ${flag}")
@@ -43,8 +43,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 ## pkgmgr_parser object (by sewook.park)
 # This library is for installer backend
-add_library(pkgmgr_parser SHARED pkgmgr_parser.c pkgmgr_parser_db.c pkgmgr_parser_signature.c pkgmgr_parser_plugin.c)
-#add_library(pkgmgr_parser SHARED pkgmgr_parser.c)
+add_library(pkgmgr_parser SHARED pkgmgr_parser.c pkgmgr_parser_feature.c pkgmgr_parser_db.c pkgmgr_parser_db_util.c pkgmgr_parser_signature.c pkgmgr_parser_plugin.c)
+
 set_target_properties(pkgmgr_parser PROPERTIES SOVERSION ${VERSION_MAJOR})
 set_target_properties(pkgmgr_parser PROPERTIES VERSION ${VERSION})
 set_target_properties(pkgmgr_parser PROPERTIES COMPILE_FLAGS "${parser_pkgs_CFLAGS_str}")
@@ -52,7 +52,6 @@ target_link_libraries(pkgmgr_parser ${parser_pkgs_LDFLAGS})
 
 ### Create pc file
 configure_file(pkgmgr-parser.pc.in ${CMAKE_CURRENT_BINARY_DIR}/pkgmgr-parser.pc @ONLY)
-configure_file(preload_list.txt.in preload_list.txt @ONLY)
 configure_file(manifest.xsd.in manifest.xsd @ONLY)
 configure_file(xml.xsd.in xml.xsd @ONLY)
 configure_file(pkgmgr_parser_plugin_list.txt.in pkgmgr_parser_plugin_list.txt @ONLY)
@@ -68,12 +67,14 @@ INSTALL(FILES
 INSTALL(FILES
 			pkgmgr_parser_db.h
 		DESTINATION include/pkgmgr)
+INSTALL(FILES
+			pkgmgr_parser_feature.h
+		DESTINATION include/pkgmgr)
 
 INSTALL(FILES
 		${CMAKE_CURRENT_BINARY_DIR}/pkgmgr-parser.pc
 		DESTINATION ${LIB_INSTALL_DIR}/pkgconfig)
 
-INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/preload_list.txt DESTINATION ${PREFIX}/etc/package-manager/preload/)
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/manifest.xsd DESTINATION ${PREFIX}/etc/package-manager/preload/)
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/xml.xsd DESTINATION ${PREFIX}/etc/package-manager/preload/)
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/pkgmgr_parser_plugin_list.txt DESTINATION ${PREFIX}/etc/package-manager/parserlib/)

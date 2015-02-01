@@ -24,9 +24,10 @@
 #include <sqlite3.h>
 #include <db-util.h>
 
-#include "pkgmgr-info-internal.h"
-#include "pkgmgr-info-debug.h"
+#include "pkgmgrinfo_private.h"
+#include "pkgmgrinfo_debug.h"
 #include "pkgmgr-info.h"
+#include "pkgmgrinfo_basic.h"
 
 #ifdef LOG_TAG
 #undef LOG_TAG
@@ -71,7 +72,7 @@ static int __certinfo_cb(void *data, int ncols, char **coltxt, char **colname)
 	for(i = 0; i < ncols; i++)
 	{
 		if (strcmp(colname[i], "package") == 0) {
-			if (coltxt[i])
+			if (coltxt[i] && info->pkgid == NULL)
 				info->pkgid = strdup(coltxt[i]);
 			else
 				info->pkgid = NULL;
@@ -121,7 +122,7 @@ static int __certinfo_cb(void *data, int ncols, char **coltxt, char **colname)
 			else
 				(info->cert_id)[PMINFO_DISTRIBUTOR2_ROOT_CERT] = 0;
 		} else if (strcmp(colname[i], "cert_info") == 0 ){
-			if (coltxt[i])
+			if (coltxt[i] && info->cert_value == NULL)
 				info->cert_value = strdup(coltxt[i]);
 			else
 				info->cert_value = NULL;
@@ -261,22 +262,12 @@ static int __delete_certinfo(const char *pkgid)
 	sqlite3_free(del_query);
 	ret = PMINFO_R_OK;
 err:
-	if (indexinfo) {
-		free(indexinfo);
-		indexinfo = NULL;
-	}
-	if (certinfo->pkgid) {
-		free(certinfo->pkgid);
-		certinfo->pkgid = NULL;
-	}
+	FREE_AND_NULL(indexinfo);
+	FREE_AND_NULL(certinfo->pkgid);
 	for (i = 0; i < MAX_CERT_TYPE; i++) {
-		if ((certinfo->cert_info)[i]) {
-			free((certinfo->cert_info)[i]);
-			(certinfo->cert_info)[i] = NULL;
-		}
+		FREE_AND_NULL((certinfo->cert_info)[i]);
 	}
-	free(certinfo);
-	certinfo = NULL;
+	FREE_AND_NULL(certinfo);
 	return ret;
 }
 
@@ -333,8 +324,7 @@ API int pkgmgrinfo_pkginfo_load_certinfo(const char *pkgid, pkgmgrinfo_certinfo_
 		}
 		if (certinfo->cert_value) {
 			(certinfo->cert_info)[i] = strdup(certinfo->cert_value);
-			free(certinfo->cert_value);
-			certinfo->cert_value = NULL;
+			FREE_AND_NULL(certinfo->cert_value);
 		}
 	}
 err:
@@ -363,18 +353,11 @@ API int pkgmgrinfo_pkginfo_destroy_certinfo(pkgmgrinfo_certinfo_h handle)
 	int i = 0;
 	pkgmgr_certinfo_x *certinfo = NULL;
 	certinfo = (pkgmgr_certinfo_x *)handle;
-	if (certinfo->pkgid) {
-		free(certinfo->pkgid);
-		certinfo->pkgid = NULL;
-	}
+	FREE_AND_NULL(certinfo->pkgid);
 	for (i = 0; i < MAX_CERT_TYPE; i++) {
-		if ((certinfo->cert_info)[i]) {
-			free((certinfo->cert_info)[i]);
-			(certinfo->cert_info)[i] = NULL;
-		}
+		FREE_AND_NULL((certinfo->cert_info)[i]);
 	}
-	free(certinfo);
-	certinfo = NULL;
+	FREE_AND_NULL(certinfo);
 	return PMINFO_R_OK;
 }
 
@@ -589,14 +572,8 @@ API int pkgmgrinfo_save_certinfo(const char *pkgid, pkgmgrinfo_instcertinfo_h ha
 	ret =  PMINFO_R_OK;
 err:
 	sqlite3_close(cert_db);
-	if (vquery) {
-		free(vquery);
-		vquery = NULL;
-	}
-	if (indexinfo) {
-		free(indexinfo);
-		indexinfo = NULL;
-	}
+	FREE_AND_NULL(vquery);
+	FREE_AND_NULL(indexinfo);
 	return ret;
 }
 
@@ -606,18 +583,11 @@ API int pkgmgrinfo_destroy_certinfo_set_handle(pkgmgrinfo_instcertinfo_h handle)
 	int i = 0;
 	pkgmgr_instcertinfo_x *certinfo = NULL;
 	certinfo = (pkgmgr_instcertinfo_x *)handle;
-	if (certinfo->pkgid) {
-		free(certinfo->pkgid);
-		certinfo->pkgid = NULL;
-	}
+	FREE_AND_NULL(certinfo->pkgid);
 	for (i = 0; i < MAX_CERT_TYPE; i++) {
-		if ((certinfo->cert_info)[i]) {
-			free((certinfo->cert_info)[i]);
-			(certinfo->cert_info)[i] = NULL;
-		}
+		FREE_AND_NULL((certinfo->cert_info)[i]);
 	}
-	free(certinfo);
-	certinfo = NULL;
+	FREE_AND_NULL(certinfo);
 	return PMINFO_R_OK;
 }
 

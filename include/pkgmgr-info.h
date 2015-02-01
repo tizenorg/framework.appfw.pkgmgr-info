@@ -49,10 +49,12 @@
 #include <errno.h>
 #include <stdbool.h>
 
+#include "pkgmgrinfo_type.h"
+#include "pkgmgrinfo_feature.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @mainpage
@@ -74,44 +76,6 @@ extern "C" {
 
 
 /**
- * @brief A handle to insert certificate information
- */
-typedef void* pkgmgrinfo_instcertinfo_h;
-
-/**
- * @brief Certificate Types to be used for setting information
- */
-typedef enum {
-	PMINFO_SET_AUTHOR_ROOT_CERT = 0,		/**< Author Root Certificate*/
-	PMINFO_SET_AUTHOR_INTERMEDIATE_CERT = 1,		/**< Author Intermediate Certificate*/
-	PMINFO_SET_AUTHOR_SIGNER_CERT = 2,		/**< Author Signer Certificate*/
-	PMINFO_SET_DISTRIBUTOR_ROOT_CERT = 3,		/**< Distributor Root Certificate*/
-	PMINFO_SET_DISTRIBUTOR_INTERMEDIATE_CERT = 4,		/**< Distributor Intermediate Certificate*/
-	PMINFO_SET_DISTRIBUTOR_SIGNER_CERT = 5,		/**< Distributor Signer Certificate*/
-	PMINFO_SET_DISTRIBUTOR2_ROOT_CERT = 6,		/**< End Entity Root Certificate*/
-	PMINFO_SET_DISTRIBUTOR2_INTERMEDIATE_CERT = 7,		/**< End Entity Intermediate Certificate*/
-	PMINFO_SET_DISTRIBUTOR2_SIGNER_CERT = 8,		/**< End Entity Signer Certificate*/
-}pkgmgrinfo_instcert_type;
-
-typedef enum {
-	PMINFO_CERT_COMPARE_MATCH,
-	PMINFO_CERT_COMPARE_MISMATCH,
-	PMINFO_CERT_COMPARE_LHS_NO_CERT,
-	PMINFO_CERT_COMPARE_RHS_NO_CERT,
-	PMINFO_CERT_COMPARE_BOTH_NO_CERT,
-	PMINFO_CERT_COMPARE_ERROR,
-} pkgmgrinfo_cert_compare_result_type_e;
-
-/**
- * @brief API return values
- */
-enum {
-	PMINFO_R_EINVAL = -2,		/**< Invalid argument */
-	PMINFO_R_ERROR = -1,		/**< General error */
-	PMINFO_R_OK = 0			/**< General success */
-};
-
-/**
  * @brief Value to be used when filtering based on install location
  */
 #define	PMINFO_PKGINFO_INSTALL_LOCATION_AUTO		"LOCATION_AUTO"
@@ -125,242 +89,6 @@ enum {
  * @brief Value to be used when filtering based on install location
  */
 #define	PMINFO_PKGINFO_INSTALL_LOCATION_EXTERNAL	"LOCATION_EXTERNAL"
-
-/**
- * @brief Value to be used when filtering based on app-component
- */
-#define	PMINFO_APPINFO_UI_APP				"UI_APP"
-
-/**
- * @brief Value to be used when filtering based on app-component
- */
-#define	PMINFO_APPINFO_SVC_APP				"SVC_APP"
-
-typedef enum {
-	PMINFO_HWACCELERATION_NOT_USE_GL = 0,		/**< Don't use hardware acceleration*/
-	PMINFO_HWACCELERATION_USE_GL = 1,		/**< Use hardware acceleration*/
-	PMINFO_HWACCELERATION_USE_SYSTEM_SETTING = 2		/**< Follow system setting for hardware acceleration */
-}pkgmgrinfo_app_hwacceleration;
-
-typedef enum {
-	PMINFO_SCREENREADER_OFF = 0,		/**< Don't use screen reader*/
-	PMINFO_SCREENREADER_ON = 1,		/**< Use screen reader*/
-	PMINFO_SCREENREADER_USE_SYSTEM_SETTING = 2		/**< Follow system setting for screen reader */
-}pkgmgrinfo_app_screenreader;
-
-typedef enum {
-	PMINFO_RECENTIMAGE_USE_ICON = 0,		/**<Use icon for recent image*/
-	PMINFO_RECENTIMAGE_USE_CAPTURE = 1,		/**< Use capture for recent image*/
-	PMINFO_RECENTIMAGE_USE_NOTHING = 2		/**< Don't use recent image */
-}pkgmgrinfo_app_recentimage;
-
-/**
- * @brief A handle to get package information
- */
-typedef void* pkgmgrinfo_pkginfo_h;
-
-/**
- * @brief A handle to get application information
- */
-typedef void* pkgmgrinfo_appinfo_h;
-
-/**
- * @brief A handle to get certificate information
- */
-typedef void* pkgmgrinfo_certinfo_h;
-
-/**
- * @brief A handle to insert package information
- */
-typedef void* pkgmgrinfo_pkgdbinfo_h;
-
-/**
- * @brief A handle to filter package information
- */
-typedef void* pkgmgrinfo_pkginfo_filter_h;
-
-/**
- * @brief A handle to filter application information
- */
-typedef void* pkgmgrinfo_appinfo_filter_h;
-
-/**
- * @brief A handle to filter application metadata  information
- */
-typedef void* pkgmgrinfo_appinfo_metadata_filter_h;
-
-/**
- * @brief A handle to get appcontrol information
- */
-typedef void* pkgmgrinfo_appcontrol_h;
-
-/**
- * @fn int (*pkgmgrinfo_pkg_list_cb ) (const pkgmgrinfo_pkginfo_h handle, void *user_data)
- *
- * @brief Specifies the type of function passed to pkgmgrinfo_pkginfo_get_list(), pkgmgrinfo_pkginfo_filter_foreach_pkginfo()
- *
- * @param[in] handle the pkginfo handle
- * @param[in] user_data user data passed to pkgmgrinfo_pkginfo_get_list(), pkgmgrinfo_pkginfo_filter_foreach_pkginfo()
- *
- * @return 0 if success, negative value(<0) if fail. Callback is not called if return value is negative.\n
- *
- * @see  pkgmgrinfo_pkginfo_get_list()
- * @see  pkgmgrinfo_pkginfo_filter_foreach_pkginfo()
- */
-typedef int (*pkgmgrinfo_pkg_list_cb ) (const pkgmgrinfo_pkginfo_h handle,
-							void *user_data);
-
-/**
- * @fn int (*pkgmgrinfo_app_list_cb ) (const pkgmgrinfo_appinfo_h handle, void *user_data)
- *
- * @brief Specifies the type of function passed to pkgmgrinfo_appinfo_get_list(), pkgmgrinfo_appinfo_filter_foreach_appinfo(), pkgmgrinfo_appinfo_metadata_filter_foreach()
- *
- * @param[in] handle the appinfo handle
- * @param[in] user_data user data passed to pkgmgrinfo_appinfo_get_list(), pkgmgrinfo_appinfo_filter_foreach_appinfo(), pkgmgrinfo_appinfo_metadata_filter_foreach()
- *
- * @return 0 if success, negative value(<0) if fail. Callback is not called if return value is negative.\n
- *
- * @see  pkgmgrinfo_appinfo_get_list()
- * @see  pkgmgrinfo_appinfo_filter_foreach_appinfo()
- * @see  pkgmgrinfo_appinfo_metadata_filter_foreach()
- */
-typedef int (*pkgmgrinfo_app_list_cb ) (const pkgmgrinfo_appinfo_h handle,
-							void *user_data);
-
-/**
- * @fn int (*pkgmgrinfo_app_category_list_cb ) (const char *category_name, void *user_data)
- *
- * @brief Specifies the type of function passed to pkgmgrinfo_appinfo_foreach_category()
- *
- * @param[in] category_name the name of the category
- * @param[in] user_data user data passed to pkgmgrinfo_appinfo_foreach_category()
- *
- * @return 0 if success, negative value(<0) if fail. Callback is not called if return value is negative.\n
- *
- * @see  pkgmgrinfo_appinfo_foreach_category()
- */
-typedef int (*pkgmgrinfo_app_category_list_cb ) (const char *category_name,
-							void *user_data);
-
-/**
- * @fn int (*pkgmgrinfo_app_permission_list_cb ) (const char *permission_type, void *user_data)
- *
- * @brief Specifies the type of function passed to pkgmgrinfo_appinfo_foreach_category()
- *
- * @param[in] permission_name the name of the permission
- * @param[in] user_data user data passed to pkgmgrinfo_appinfo_foreach_category()
- *
- * @return 0 if success, negative value(<0) if fail. Callback is not called if return value is negative.\n
- *
- * @see  pkgmgrinfo_appinfo_foreach_category()
- */
-typedef int (*pkgmgrinfo_app_permission_list_cb ) (const char *permission_type,
-							void *user_data);
-
-/**
- * @fn int (*pkgmgrinfo_pkg_privilege_list_cb ) (const char *privilege_name, void *user_data)
- *
- * @brief Specifies the type of function passed to pkgmgrinfo_pkginfo_foreach_privilege()
- *
- * @param[in] privilege_name the name of the privilege
- * @param[in] user_data user data passed to pkgmgrinfo_pkginfo_foreach_privilege()
- *
- * @return 0 if success, negative value(<0) if fail. Callback is not called if return value is negative.\n
- *
- * @see  pkgmgrinfo_pkginfo_foreach_privilege()
- */
-typedef int (*pkgmgrinfo_pkg_privilege_list_cb ) (const char *privilege_name,
-							void *user_data);
-
-/**
- * @fn int (*pkgmgrinfo_app_metadata_list_cb ) (const char *metadata_key, const char *metadata_value, void *user_data)
- *
- * @brief Specifies the type of function passed to pkgmgrinfo_appinfo_foreach_metadata()
- *
- * @param[in] metadata_name the name of the metadata
- * @param[in] metadata_value the value of the metadata
- * @param[in] user_data user data passed to pkgmgrinfo_appinfo_foreach_metadata()
- *
- * @return 0 if success, negative value(<0) if fail. Callback is not called if return value is negative.\n
- *
- * @see  pkgmgrinfo_appinfo_foreach_metadata()
- */
-typedef int (*pkgmgrinfo_app_metadata_list_cb ) (const char *metadata_key,
-							const char *metadata_value, void *user_data);
-
-/**
- * @fn int (*pkgmgrinfo_app_control_list_cb ) (pkgmgrinfo_appcontrol_h handle, void *user_data)
- *
- * @brief Specifies the type of function passed to pkgmgrinfo_appinfo_foreach_appcontrol()
- *
- * @param[in] handle the appcontrol handle to be used to get operation, uri and mime info
- * @param[in] user_data user data passed to pkgmgrinfo_appinfo_foreach_appcontrol()
- *
- * @return 0 if success, negative value(<0) if fail. Callback is not called if return value is negative.\n
- *
- * @see  pkgmgrinfo_appinfo_foreach_appcontrol()
- */
-typedef int (*pkgmgrinfo_app_control_list_cb ) (pkgmgrinfo_appcontrol_h handle,
-							void *user_data);
-
-/**
- * @brief Install Location Types
- */
-typedef enum {
-	PMINFO_INSTALL_LOCATION_AUTO = 0,		/**< Auto*/
-	PMINFO_INSTALL_LOCATION_INTERNAL_ONLY,		/**< Internal Installation*/
-	PMINFO_INSTALL_LOCATION_PREFER_EXTERNAL,		/**< External Installation*/
-}pkgmgrinfo_install_location;
-
-/**
- * @brief Application Component Types
- */
-typedef enum {
-	PMINFO_ALL_APP = 0,	/**< All Application*/
-	PMINFO_UI_APP,		/**< UI Application*/
-	PMINFO_SVC_APP,		/**< Service Application*/
-}pkgmgrinfo_app_component;
-
-/**
- * @brief Application Storage Types
- */
-typedef enum {
-	PMINFO_INTERNAL_STORAGE = 0,		/**< Internal Storage*/
-	PMINFO_EXTERNAL_STORAGE = 1,		/**< External Storage*/
-}pkgmgrinfo_installed_storage;
-
-/**
- * @brief Certificate Types to be used for getting information
- */
-typedef enum {
-	PMINFO_AUTHOR_ROOT_CERT = 0,		/**< Author Root Certificate*/
-	PMINFO_AUTHOR_INTERMEDIATE_CERT = 1,		/**< Author Intermediate Certificate*/
-	PMINFO_AUTHOR_SIGNER_CERT = 2,		/**< Author Signer Certificate*/
-	PMINFO_DISTRIBUTOR_ROOT_CERT = 3,		/**< Distributor Root Certificate*/
-	PMINFO_DISTRIBUTOR_INTERMEDIATE_CERT = 4,		/**< Distributor Intermediate Certificate*/
-	PMINFO_DISTRIBUTOR_SIGNER_CERT = 5,		/**< Distributor Signer Certificate*/
-	PMINFO_DISTRIBUTOR2_ROOT_CERT = 6,		/**< End Entity Root Certificate*/
-	PMINFO_DISTRIBUTOR2_INTERMEDIATE_CERT = 7,		/**< End Entity Intermediate Certificate*/
-	PMINFO_DISTRIBUTOR2_SIGNER_CERT = 8,		/**< End Entity Signer Certificate*/
-}pkgmgrinfo_cert_type;
-
-/**
- * @brief Install Location Types to be used when setting data in DB
- */
-typedef enum {
-	INSTALL_INTERNAL = 0,		/**< Internal Installation*/
-	INSTALL_EXTERNAL,		/**< External Installation*/
-} INSTALL_LOCATION;
-
- /**
-  * @brief permission Types
-  */
- typedef enum {
-	 PMINFO_PERMISSION_NORMAL = 0,		 /**< permission normal*/
-	 PMINFO_PERMISSION_SIGNATURE, 	 /**< permission type is signature*/
-	 PMINFO_PERMISSION_PRIVILEGE, 	 /**< permission type is privilege*/
- }pkgmgrinfo_permission_type;
-
 
  /** String property for filtering based on package info*/
 #define	PMINFO_PKGINFO_PROP_PACKAGE_ID		"PMINFO_PKGINFO_PROP_PACKAGE_ID"
@@ -378,6 +106,8 @@ typedef enum {
 #define	PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_EMAIL		"PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_EMAIL"
  /** String property for filtering based on package info*/
 #define	PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_HREF		"PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_HREF"
+  /** String property for filtering based on package info*/
+#define	PMINFO_PKGINFO_PROP_PACKAGE_STORECLIENT_ID		"PMINFO_PKGINFO_PROP_PACKAGE_STORECLIENT_ID"
 
  /** Boolean property for filtering based on package info*/
 #define	PMINFO_PKGINFO_PROP_PACKAGE_REMOVABLE		"PMINFO_PKGINFO_PROP_PACKAGE_REMOVABLE"
@@ -391,9 +121,17 @@ typedef enum {
 #define	PMINFO_PKGINFO_PROP_PACKAGE_APPSETTING		"PMINFO_PKGINFO_PROP_PACKAGE_APPSETTING"
    /** Boolean property for filtering based on package info*/
 #define	PMINFO_PKGINFO_PROP_PACKAGE_NODISPLAY_SETTING		"PMINFO_PKGINFO_PROP_PACKAGE_NODISPLAY_SETTING"
+ /** Boolean property for filtering based on package info*/
+#define	PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_DISABLE		"PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_DISABLE"
+  /** Boolean property for filtering based on package info*/
+#define	PMINFO_PKGINFO_PROP_PACKAGE_DISABLE				"PMINFO_PKGINFO_PROP_PACKAGE_DISABLE"
+ /** Boolean property for filtering based on package info*/
+#define	PMINFO_PKGINFO_PROP_PACKAGE_USE_RESET				"PMINFO_PKGINFO_PROP_PACKAGE_USE_RESET"
 
  /** Integer property for filtering based on package info*/
 #define	PMINFO_PKGINFO_PROP_PACKAGE_SIZE		"PMINFO_PKGINFO_PROP_PACKAGE_SIZE"
+ /** Integer property for filtering based on package info*/
+#define	PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_MODE		"PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_MODE"
 
  /** String property for filtering based on app info*/
 #define	PMINFO_APPINFO_PROP_APP_ID		"PMINFO_APPINFO_PROP_APP_ID"
@@ -430,10 +168,26 @@ typedef enum {
 #define	PMINFO_APPINFO_PROP_APP_TASKMANAGE	"PMINFO_APPINFO_PROP_APP_TASKMANAGE"
  /** Boolean property for filtering based on app info*/
 #define	PMINFO_APPINFO_PROP_APP_LAUNCHCONDITION	"PMINFO_APPINFO_PROP_APP_LAUNCHCONDITION"
+ /** Boolean property for filtering based on app info*/
+#define	PMINFO_APPINFO_PROP_APP_SUPPORT_DISABLE	"PMINFO_APPINFO_PROP_APP_SUPPORT_DISABLE"
+ /** Boolean property for filtering based on app info*/
+#define	PMINFO_APPINFO_PROP_APP_DISABLE			"PMINFO_APPINFO_PROP_APP_DISABLE"
+ /** Boolean property for filtering based on app info*/
+#define	PMINFO_APPINFO_PROP_APP_REMOVABLE		"PMINFO_APPINFO_PROP_APP_REMOVABLE"
+
+ /** Integer property for filtering based on app info*/
+#define	PMINFO_APPINFO_PROP_APP_SUPPORT_MODE		"PMINFO_APPINFO_PROP_APP_SUPPORT_MODE"
 
  /** will be updated*/
  /** string property for filtering based on pkg info*/
 #define	PMINFO_PKGINFO_PROP_RANGE_BASIC	"PMINFO_PKGINFO_PROP_RANGE_BASIC"
+
+/** Integer property for mode*/
+#define	PMINFO_MODE_PROP_ULTRA_POWER_SAVING	0x00000001
+#define	PMINFO_MODE_PROP_COOL_DOWN			0x00000002
+#define	PMINFO_MODE_PROP_SCREEN_READER		0x00000004
+
+
 
 /**
  * @fn	int pkgmgrinfo_pkginfo_get_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, void *user_data)
@@ -556,45 +310,6 @@ static int unmounted_list_pkgs()
 int pkgmgrinfo_pkginfo_get_unmounted_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, void *user_data);
 
 /**
- * @fn	int pkgmgrinfo_pkginfo_get_disabled_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, void *user_data);
- * @brief	This API gets list of disabled package
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- * @param[in]	pkg_list_cb		iteration function for list
- * @param[in] user_data	user data to be passed to callback function
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		None
- * @post		None
- * @code
-int pkg_list_cb(pkgmgrinfo_pkginfo_h handle, void *user_data)
-{
-	char *pkgid2 = NULL;
-
-	pkgmgrinfo_pkginfo_get_pkgid(handle, &pkgid2);
-	printf("appid: %s\n", pkgid2);
-
-	return 0;
-}
-
-static int disabled_list_pkgs()
-{
-	int ret = 0;
-
-	ret = pkgmgrinfo_pkginfo_get_disabled_list(pkg_list_cb, NULL);
-	if (ret != PMINFO_R_OK) {
-		return -1;
-	}
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_pkginfo_get_disabled_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, void *user_data);
-
-/**
  * @fn int pkgmgrinfo_pkginfo_get_unmounted_pkginfo(const char *pkgid, pkgmgrinfo_pkginfo_h *handle)
  * @brief	This API creates the package information handle from db
  *
@@ -632,46 +347,6 @@ static int get_pkg_type(const char *pkgid)
  * @endcode
  */
 int pkgmgrinfo_pkginfo_get_unmounted_pkginfo(const char *pkgid, pkgmgrinfo_pkginfo_h *handle);
-
-
-/**
- * @fn int pkgmgrinfo_pkginfo_get_disabled_pkginfo(const char *pkgid, pkgmgrinfo_pkginfo_h *handle)
- * @brief	This API creates the package information handle from db
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in]	pkgid	pointer to package ID
- * @param[out] handle		pointer to the package info handle.
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		None
- * @post		pkgmgrinfo_pkginfo_destroy_pkginfo()
- * @see		pkgmgrinfo_pkginfo_get_pkgid()
- * @see		pkgmgrinfo_pkginfo_is_removable()
- * @code
-static int get_pkg_type(const char *pkgid)
-{
-	int ret = 0;
-	char *type = NULL;
-	pkgmgrinfo_pkginfo_h handle;
-	ret = pkgmgrinfo_pkginfo_get_disabled_pkginfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_pkginfo_get_type(handle, &type);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-		return -1;
-	}
-	printf("pkgtype: %s\n", type);
-	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_pkginfo_get_disabled_pkginfo(const char *pkgid, pkgmgrinfo_pkginfo_h *handle);
 
 /**
  * @fn int pkgmgrinfo_pkginfo_get_pkginfo(const char *pkgid, pkgmgrinfo_pkginfo_h *handle)
@@ -906,154 +581,6 @@ static int get_pkg_install_location(const char *pkgid)
  * @endcode
  */
 int pkgmgrinfo_pkginfo_get_install_location(pkgmgrinfo_pkginfo_h handle, pkgmgrinfo_install_location *location);
-
-/**
- * @fn int pkgmgrinfo_pkginfo_get_package_size(pkgmgrinfo_pkginfo_h handle, int *size)
- * @brief	This API gets the package size from the package ID. size will be 0 if package install location is internal-only.
- size will be 0 if package install location is prefer-external but size is not specified in manifest file.Application should check
- the return value of pkgmgrinfo_pkginfo_get_install_location() and use it to distinguish the above cases.
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in]	handle	pointer to package info handle
- * @param[out] size		pointer to hold package size
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_pkginfo_get_pkginfo()
- * @post		pkgmgrinfo_pkginfo_destroy_pkginfo()
- * @see		pkgmgrinfo_pkginfo_get_pkgid()
- * @see		pkgmgrinfo_pkginfo_is_removable()
- * @code
-static int get_pkg_size(const char *pkgid)
-{
-	int ret = 0;
-	int size = 0;
-	pkgmgrinfo_pkginfo_h handle;
-	ret = pkgmgrinfo_pkginfo_get_pkginfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_pkginfo_get_package_size(handle, &size);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-		return -1;
-	}
-	printf("pkgsize: %d\n", size);
-	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_pkginfo_get_package_size(pkgmgrinfo_pkginfo_h handle, int *size);
-
-/**
- * @fn int pkgmgrinfo_pkginfo_get_total_size(pkgmgrinfo_pkginfo_h handle, int *size)
- * @brief	This API gets the installed package total size on the target.
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in]	handle	pointer to package info handle
- * @param[out] size		pointer to hold package total size
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @code
-static int get_pkg_total_size(const char *pkgid)
-{
-	int ret = 0;
-	int size = 0;
-	pkgmgrinfo_pkginfo_h handle;
-	ret = pkgmgrinfo_pkginfo_get_pkginfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_pkginfo_get_total_size(handle, &size);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-		return -1;
-	}
-	printf("pkg total size: %d\n", size);
-	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-	return 0;
-}
- * @endcode
- */
- int pkgmgrinfo_pkginfo_get_total_size(pkgmgrinfo_pkginfo_h handle, int *size);
-
-/**
- * @fn int pkgmgrinfo_pkginfo_get_data_size(pkgmgrinfo_pkginfo_h handle, int *size)
- * @brief	This API gets the installed package data size on the target.
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in]	handle	pointer to package info handle
- * @param[out] size		pointer to hold package data size
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @code
-static int get_pkg_data_size(const char *pkgid)
-{
-	int ret = 0;
-	int size = 0;
-	pkgmgrinfo_pkginfo_h handle;
-	ret = pkgmgrinfo_pkginfo_get_pkginfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_pkginfo_get_data_size(handle, &size);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-		return -1;
-	}
-	printf("pkg data size: %d\n", size);
-	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-	return 0;
-}
- * @endcode
- */
- int pkgmgrinfo_pkginfo_get_data_size(pkgmgrinfo_pkginfo_h handle, int *size);
-
-/**
- * @fn int pkgmgrinfo_pkginfo_get_size_info(pkgmgrinfo_pkginfo_h handle, int *total_size, int *data_size)
- * @brief	This API gets the size information for given package on the target.
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in]	handle	pointer to package info handle
- * @param[out] total_size		pointer to hold package total size
- * @param[out] data_size		pointer to hold package data size
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @code
-static int get_pkg_data_size(const char *pkgid)
-{
-	int ret = 0;
-	int total_size = 0;
-	int data_size = 0;
-	pkgmgrinfo_pkginfo_h handle;
-	ret = pkgmgrinfo_pkginfo_get_pkginfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_pkginfo_get_size_info(handle, &total_size, &data_size);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-		return -1;
-	}
-	printf("pkg size:  total=%d, data=%d\n", total_size, data_size);
-	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_pkginfo_get_size_info(pkgmgrinfo_pkginfo_h handle, int *total_size, int *data_size);
 
 /**
  * @fn int pkgmgrinfo_pkginfo_get_icon(pkgmgrinfo_pkginfo_h handle, char **icon)
@@ -1559,6 +1086,152 @@ static int get_csc_path(const char *pkgid)
 int pkgmgrinfo_pkginfo_get_csc_path(pkgmgrinfo_pkginfo_h handle, char **path);
 
 /**
+ * @fn int pkgmgrinfo_pkginfo_get_support_mode(pkgmgrinfo_pkginfo_h handle, int *support_mode)
+ * @brief	This API gets the support_mode of package
+ *
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] handle		pointer to package info handle
+ * @param[out] support_mode		pointer to hold support_mode of package
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @code
+static int get_support_mode(const char *pkgid)
+{
+	int ret = 0;
+	int *support_mode = 0;
+	pkgmgrinfo_pkginfo_h handle = NULL;
+	ret = pkgmgrinfo_pkginfo_get_pkginfo(pkgid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+
+	ret = pkgmgrinfo_pkginfo_get_support_mode(handle, &support_mode);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+		return -1;
+	}
+	printf("support_mode : %s\n", support_mode);
+	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_pkginfo_get_support_mode(pkgmgrinfo_pkginfo_h handle, int *support_mode);
+
+
+/**
+ * @fn int pkgmgrinfo_pkginfo_get_hash(pkgmgrinfo_pkginfo_h handle, char **hash)
+ * @brief	This API gets the package_hash of package
+ *
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] handle		pointer to package info handle
+ * @param[out] hash		pointer to hold package_hash of package
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @code
+static int get_package_hash(const char *pkgid)
+{
+	int ret = 0;
+	int *hash = NULL;;
+	pkgmgrinfo_pkginfo_h handle = NULL;
+	ret = pkgmgrinfo_pkginfo_get_pkginfo(pkgid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+
+	ret = pkgmgrinfo_pkginfo_get_hash(handle, &hash);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+		return -1;
+	}
+	printf("package_hash : %s\n", hash);
+	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+
+	return 0;
+}
+ * @endcode
+*/
+
+int pkgmgrinfo_pkginfo_get_hash(pkgmgrinfo_pkginfo_h handle, char **hash);
+
+/**
+ * @fn int pkgmgrinfo_pkginfo_get_support_reset(pkgmgrinfo_pkginfo_h handle, char **support_reset)
+ * @brief	This API gets the support reset of package
+ *
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] handle		pointer to package info handle
+ * @param[out] support_reset		pointer to hold support reset of package
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @code
+static int get_support_reset(const char *pkgid)
+{
+	int ret = 0;
+	char *support_reset = 0;
+	pkgmgrinfo_pkginfo_h handle = NULL;
+	ret = pkgmgrinfo_pkginfo_get_pkginfo(pkgid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+
+	ret = pkgmgrinfo_pkginfo_get_support_reset(handle, &support_reset);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+		return -1;
+	}
+	printf("support_reset : %s\n", support_reset);
+	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_pkginfo_get_support_reset(pkgmgrinfo_pkginfo_h handle, char **support_reset);
+
+/**
+ * @fn int pkgmgrinfo_pkginfo_get_groupid(pkgmgrinfo_pkginfo_h handle, char **groupid)
+ * @brief	This API gets the groupid of package
+ *
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] handle		pointer to package info handle
+ * @param[out] groupid		pointer to hold groupid of package
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @code
+static int get_groupid(const char *pkgid)
+{
+	int ret = 0;
+	char *groupid = 0;
+	pkgmgrinfo_pkginfo_h handle = NULL;
+	ret = pkgmgrinfo_pkginfo_get_pkginfo(pkgid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+
+	ret = pkgmgrinfo_pkginfo_get_groupid(handle, &groupid);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+		return -1;
+	}
+	printf("groupid : %s\n", groupid);
+	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_pkginfo_get_groupid(pkgmgrinfo_pkginfo_h handle, char **groupid);
+
+/**
  * @fn int pkgmgrinfo_pkginfo_compare_pkg_cert_info(const char *lhs_package_id, const char *rhs_package_id, pkgmgrinfo_cert_compare_result_type_e *compare_result)
  * @brief	This API compare the cert information from given package id
  *
@@ -1862,6 +1535,44 @@ static int get_pkg_update(const char *pkgid)
 int pkgmgrinfo_pkginfo_is_update(pkgmgrinfo_pkginfo_h handle, bool *update);
 
 /**
+ * @fn int pkgmgrinfo_pkginfo_is_support_disable(pkgmgrinfo_pkginfo_h handle, bool *support_disable)
+ * @brief	This API gets the package 'support_disable' value from the package ID
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	handle	pointer to package info handle
+ * @param[out] 	support_disable	pointer to hold package support_disable value
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_pkginfo_get_pkginfo()
+ * @post		pkgmgrinfo_pkginfo_destroy_pkginfo()
+ * @see		pkgmgrinfo_pkginfo_get_pkgid()
+ * @code
+static int get_pkg_support_disable(const char *pkgid)
+{
+	int ret = 0;
+	bool support_disable;
+	pkgmgrinfo_pkginfo_h handle;
+	ret = pkgmgrinfo_pkginfo_get_pkginfo(pkgid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_pkginfo_is_support_disable(handle, &support_disable);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+		return -1;
+	}
+	printf("pkg support_disable: %d\n", support_disable);
+	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_pkginfo_is_support_disable(pkgmgrinfo_pkginfo_h handle, bool *support_disable);
+
+/**
  * @fn int pkgmgrinfo_pkginfo_is_accessible(pkgmgrinfo_pkginfo_h handle, bool *accessible)
  * @brief	This API gets the package 'accessible' value from the package ID
  *
@@ -1899,6 +1610,46 @@ static int get_pkg_accessible(const char *pkgid)
  * @endcode
  */
 int pkgmgrinfo_pkginfo_is_accessible(pkgmgrinfo_pkginfo_h handle, bool *accessible);
+
+
+/**
+ * @fn int pkgmgrinfo_pkginfo_is_mother_package(pkgmgrinfo_pkginfo_h handle, bool *mother_package)
+ * @brief	This API gets the package 'mother_package' value from the package ID
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	handle	pointer to package info handle
+ * @param[out] mother_package	pointer to hold package mother_package value
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_pkginfo_get_pkginfo()
+ * @post		pkgmgrinfo_pkginfo_destroy_pkginfo()
+ * @see		pkgmgrinfo_pkginfo_get_pkgid()
+ * @see		pkgmgrinfo_pkginfo_is_readonly()
+ * @code
+static int get_pkg_mother_package(const char *pkgid)
+{
+	int ret = 0;
+	bool mother_package = false;
+	pkgmgrinfo_pkginfo_h handle = NULL;
+	ret = pkgmgrinfo_pkginfo_get_pkginfo(pkgid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_pkginfo_is_mother_package(handle, &mother_package);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+		return -1;
+	}
+	printf("pkg mother_package: %d\n", mother_package);
+	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_pkginfo_is_mother_package(pkgmgrinfo_pkginfo_h handle, bool *mother_package);
 
 /**
  * @fn int pkgmgrinfo_pkginfo_destroy_pkginfo(pkgmgrinfo_pkginfo_h handle)
@@ -2258,6 +2009,48 @@ static int get_rpm_pkg_count()
 int pkgmgrinfo_pkginfo_filter_count(pkgmgrinfo_pkginfo_filter_h handle, int *count);
 
 /**
+ * @fn	int pkgmgrinfo_pkginfo_privilege_filter_foreach(const char *privilege,
+			pkgmgrinfo_pkg_list_cb pkg_list_cb, void *user_data);
+ * @brief	This API gets the list of package id for a particular privilege
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ * @param[in]	privilege		privilege to find package id list.
+ * @param[in]	pkg_list_cb		iteration function for list
+ * @param[in] user_data	user data to be passed to callback function
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @code
+int pkg_list_cb(const pkgmgrinfo_pkginfo_h handle, void *user_data)
+{
+	int ret = PMINFO_R_OK;
+	char *pkgid = NULL;
+	ret = pkgmgrinfo_pkginfo_get_pkgid(handle, &pkgid);
+	if (ret != PMINFO_R_OK) {
+		return -1;
+	} else {
+		printf("pkgid : %s\n", pkgid);
+	}
+
+	return 0;
+}
+
+static int list_pkgid_by_privilege(const char *privilege)
+{
+	int ret = PMINFO_R_OK;
+
+	ret = pkgmgrinfo_pkginfo_privilege_filter_foreach(privilege, pkg_list_cb, NULL);
+
+	return ret;
+}
+ * @endcode
+ */
+int pkgmgrinfo_pkginfo_privilege_filter_foreach(const char *privilege,
+			pkgmgrinfo_pkg_list_cb pkg_list_cb, void *user_data);
+
+/**
  * @fn	int pkgmgrinfo_pkginfo_foreach_privilege(pkgmgrinfo_pkginfo_h handle,
 			pkgmgrinfo_pkg_privilege_list_cb privilege_func, void *user_data);
  * @brief	This API gets the list of privilege for a particular package
@@ -2510,6 +2303,45 @@ static int unmounted_list_apps()
 int pkgmgrinfo_appinfo_get_unmounted_list(pkgmgrinfo_app_list_cb app_func, void *user_data);
 
 /**
+ * @fn int pkgmgrinfo_appinfo_get_unmounted_appinfo(const char *appid, pkgmgrinfo_appinfo_h *handle)
+ * @brief	This API creates the application information handle from db
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	appid	pointer to appid
+ * @param[out] handle		pointer to the application info handle.
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		None
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_pkgid()
+ * @see		pkgmgrinfo_appinfo_is_multiple()
+ * @code
+static int get_app_type(const char *appid)
+{
+	int ret = 0;
+	char *type = NULL;
+	pkgmgrinfo_appinfo_h handle;
+	ret = pkgmgrinfo_appinfo_get_unmounted_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_get_apptype(handle, &type);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("apptype: %s\n", type);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_unmounted_appinfo(const char *appid, pkgmgrinfo_appinfo_h *handle);
+
+/**
  * @fn int pkgmgrinfo_appinfo_get_appinfo(const char *appid, pkgmgrinfo_appinfo_h *handle)
  * @brief	This API creates the application information handle from db
  *
@@ -2549,91 +2381,6 @@ static int get_app_type(const char *appid)
 int pkgmgrinfo_appinfo_get_appinfo(const char *appid, pkgmgrinfo_appinfo_h *handle);
 
 /**
- * @fn	int pkgmgrinfo_appinfo_get_disabled_list(pkgmgrinfo_pkginfo_h handle, pkgmgrinfo_app_component component,
- pkgmgrinfo_app_list_cb app_func, void *user_data)
- * @brief	This API gets list of disabled applications for a particular package
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- * @param[in]	handle		package info handle
- * @param[in]	component	application component
- * @param[in]	app_func		iteration function for list
- * @param[in] user_data	user data to be passed to callback function
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_pkginfo_get_pkginfo()
- * @post		pkgmgrinfo_pkginfo_destroy_pkginfo()
- * @code
-int app_func(pkgmgrinfo_appinfo_h handle, void *user_data)
-{
-	char *appid = NULL;
-	pkgmgrinfo_appinfo_get_appid(handle, &appid);
-	printf("appid : %s\n", appid);
-	return 0;
-}
-
-static int list_apps(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkginfo_h handle;
-	ret = pkgmgrinfo_pkginfo_get_disabled_pkginfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_appinfo_get_disabled_list(handle, PMINFO_UI_APP, app_func, NULL);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_pkginfo_destroy_pkginfo(handle);
-	return 0;
-}
- * @endcode
- */
-
-int pkgmgrinfo_appinfo_get_disabled_list(pkgmgrinfo_pkginfo_h handle, pkgmgrinfo_app_component component,
-						pkgmgrinfo_app_list_cb app_func, void *user_data);
-
-/**
- * @fn int pkgmgrinfo_appinfo_get_disabled_appinfo(const char *appid, pkgmgrinfo_appinfo_h *handle)
- * @brief	This API creates the disabled application information handle from db
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in]	appid	pointer to appid
- * @param[out] handle		pointer to the application info handle.
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		None
- * @post		pkgmgrinfo_appinfo_destroy_appinfo()
- * @see		pkgmgrinfo_appinfo_get_pkgid()
- * @code
-static int get_app_type(const char *appid)
-{
-	int ret = 0;
-	char *type = NULL;
-	pkgmgrinfo_appinfo_h handle;
-	ret = pkgmgrinfo_appinfo_get_disabled_appinfo(appid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_appinfo_get_apptype(handle, &type);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_appinfo_destroy_appinfo(handle);
-		return -1;
-	}
-	printf("apptype: %s\n", type);
-	pkgmgrinfo_appinfo_destroy_appinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_appinfo_get_disabled_appinfo(const char *appid, pkgmgrinfo_appinfo_h *handle);
-
-/**
  * @fn int pkgmgrinfo_appinfo_get_appid(pkgmgrinfo_appinfo_h handle, char **appid)
  * @brief	This API gets the application ID
  *
@@ -2671,45 +2418,6 @@ static int get_app_id(const char *appid)
  * @endcode
  */
 int pkgmgrinfo_appinfo_get_appid(pkgmgrinfo_appinfo_h  handle, char **appid);
-
-/**
- * @fn int pkgmgrinfo_appinfo_get_unmounted_appinfo(const char *appid, pkgmgrinfo_appinfo_h *handle)
- * @brief	This API creates the application information handle from db
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in]	appid	pointer to appid
- * @param[out] handle		pointer to the application info handle.
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		None
- * @post		pkgmgrinfo_appinfo_destroy_appinfo()
- * @see		pkgmgrinfo_appinfo_get_pkgid()
- * @see		pkgmgrinfo_appinfo_is_multiple()
- * @code
-static int get_app_type(const char *appid)
-{
-	int ret = 0;
-	char *type = NULL;
-	pkgmgrinfo_appinfo_h handle;
-	ret = pkgmgrinfo_appinfo_get_unmounted_appinfo(appid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_appinfo_get_apptype(handle, &type);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_appinfo_destroy_appinfo(handle);
-		return -1;
-	}
-	printf("apptype: %s\n", type);
-	pkgmgrinfo_appinfo_destroy_appinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_appinfo_get_unmounted_appinfo(const char *appid, pkgmgrinfo_appinfo_h *handle);
 
 /**
  * @fn int pkgmgrinfo_appinfo_get_pkgname(pkgmgrinfo_appinfo_h handle, char **pkg_name)
@@ -2788,6 +2496,45 @@ static int get_app_pkgid(const char *appid)
  * @endcode
  */
 int pkgmgrinfo_appinfo_get_pkgid(pkgmgrinfo_appinfo_h  handle, char **pkgid);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_get_pkgtype(pkgmgrinfo_appinfo_h handle, char **pkgtype)
+ * @brief	This API gets the package type of the application
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] handle		pointer to the application info handle.
+ * @param[out] pkgtype		pointer to hold package type
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @see		pkgmgrinfo_appinfo_is_multiple()
+ * @code
+static int get_app_pkgtype(const char *appid)
+{
+	int ret = 0;
+	char *pkgtype = NULL;
+	pkgmgrinfo_appinfo_h handle;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_get_pkgtype(handle, &pkgtype);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("pkgtype: %s\n", pkgtype);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_pkgtype(pkgmgrinfo_appinfo_h  handle, char **pkgtype);
 
 /**
  * @fn int pkgmgrinfo_appinfo_get_exec(pkgmgrinfo_appinfo_h handle, char **exec)
@@ -3593,6 +3340,45 @@ static int get_app_effectimages(const char *appid)
 int pkgmgrinfo_appinfo_get_effectimage(pkgmgrinfo_appinfo_h  handle, char **portrait_img, char **landscape_img);
 
 /**
+ * @fn int pkgmgrinfo_appinfo_get_effectimage_type(pkgmgrinfo_appinfo_h  handle, char **effectimg_type)
+ * @brief	This API gets the application's effect image type
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	handle	pointer to application info handle
+ * @param[out]  effectimg_type contains effect image type
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @see		pkgmgrinfo_appinfo_is_nodisplay()
+ * @code
+static int get_app_effectimage_type(const char *appid)
+{
+	int ret = 0;
+	char *effectimg_type = NULL;
+	pkgmgrinfo_appinfo_h handle;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_get_effectimage_type(handle, &effectimg_type);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("app effect image type: %s\n", effectimg_type);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_effectimage_type(pkgmgrinfo_appinfo_h  handle, char **effectimg_type);
+
+/**
  * @fn int pkgmgrinfo_appinfo_get_submode_mainid(pkgmgrinfo_appinfo_h handle, char **submode_mainid)
  * @brief	This API gets the submode_mainid of the application
  *
@@ -3666,44 +3452,6 @@ static int get_localed_label(const char *appid, const char *locale)
 int pkgmgrinfo_appinfo_get_localed_label(const char *appid, const char *locale, char **label);
 
 /**
- * @fn int pkgmgrinfo_appinfo_is_category_exist(pkgmgrinfo_appinfo_h handle, const char *category, bool *exist)
- * @brief	This API checks if the application has the given category
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in]	handle	pointer to the application info handle
- * @param[in]	category	category
- * @param[out] exist		value Gets whether the application has the given category
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @code
-static int is_category_exist(const char *appid, const char *category)
-{
-	int ret = 0;
-	pkgmgrinfo_appinfo_h handle;
-	bool exist = false;
-
-	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-
-	ret = pkgmgrinfo_appinfo_is_category_exist(handle, category, &exist);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_appinfo_destroy_appinfo(handle);
-		return -1;
-	}
-
-	pkgmgrinfo_appinfo_destroy_appinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_appinfo_is_category_exist(pkgmgrinfo_appinfo_h handle, const char *category, bool *exist);
-
-/**
  * @fn int pkgmgrinfo_appinfo_get_metadata_value(pkgmgrinfo_appinfo_h handle, const char *metadata_key, char **metadata_value)
  * @brief	This API gets metadata value by given metadata key
  *
@@ -3740,6 +3488,273 @@ static int get_metadata_value(const char *appid, const char *metadata_key)
  * @endcode
  */
 int pkgmgrinfo_appinfo_get_metadata_value(pkgmgrinfo_appinfo_h handle, const char *metadata_key, char **metadata_value);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_get_multi_instance_mainid(pkgmgrinfo_appinfo_h  handle, char **multi_instance_mainid)
+ * @brief	This API gets the multi_instance_mainid of the application
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] handle		pointer to the application info handle.
+ * @param[out] multi_instance_mainid		pointer to hold app multi_instance_mainid
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @see		pkgmgrinfo_appinfo_is_multiple()
+ * @code
+static int get_app_multi_instance_mainid(const char *appid)
+{
+	int ret = 0;
+	char *multi_instance_mainid = NULL;
+	pkgmgrinfo_appinfo_h handle;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_get_multi_instance_mainid(handle, &multi_instance_mainid);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("multi_instance_mainid: %s\n", multi_instance_mainid);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_multi_instance_mainid(pkgmgrinfo_appinfo_h  handle, char **multi_instance_mainid);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_get_datacontrol_info(const char *providerid, const char *type, char **appid, char **access);
+ * @brief	This API gets the datacontrol info
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] providerid		pointer to the providerid of dataconltrol.
+ * @param[in] type			pointer to the type of dataconltrol.
+ * @param[out] appid			pointer to hold appid, need to free after using
+ * @param[out] access			pointer to hold access, need to free after using
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_datacontrol_info(const char *providerid, const char *type, char **appid, char **access);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_get_datacontrol_appid(const char *providerid, char **appid);
+ * @brief	This API gets the appid of datacontrol
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] providerid		pointer to the providerid of dataconltrol.
+ * @param[out] appid			pointer to hold appid, need to free after using
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_datacontrol_appid(const char *providerid, char **appid);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_get_support_mode(pkgmgrinfo_appinfo_h  handle, int *support_mode)
+ * @brief	This API gets the support_mode of the application
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] handle		pointer to the application info handle.
+ * @param[out] support_mode		pointer to hold app support_mode
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @code
+static int get_app_support_mode(const char *appid)
+{
+	int ret = 0;
+	int support_mode = 0;
+	pkgmgrinfo_appinfo_h handle;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_get_support_mode(handle, &support_mode);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("support_mode: %s\n", support_mode);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_support_mode(pkgmgrinfo_appinfo_h handle, int *support_mode);
+
+
+/**
+ * @fn int pkgmgrinfo_appinfo_get_support_feature(pkgmgrinfo_appinfo_h  handle, int *support_feature)
+ * @brief	This API gets the support_funtion of the application
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] handle		pointer to the application info handle.
+ * @param[out] support_feature		pointer to hold app support_feature
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @code
+static int get_app_support_feature(const char *appid)
+{
+	int ret = 0;
+	int support_feature = 0;
+	pkgmgrinfo_appinfo_h handle = NULL;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_get_support_feature(handle, &support_feature);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("support_feature: %d\n", support_feature);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_support_feature(pkgmgrinfo_appinfo_h handle, int *support_feature);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_get_uginfo(const char *ug_name, pkgmgrinfo_appinfo_h *handle)
+ * @brief	This API creates the application information handle from ug_name
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	ug_name	pointer to ug_name
+ * @param[out] handle		pointer to the application info handle.
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		None
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @code
+static int get_app_uginfo(const char *ug_name)
+{
+	int ret = 0;
+	char *appid = NULL;
+	pkgmgrinfo_appinfo_h handle;
+	ret = pkgmgrinfo_appinfo_get_uginfo(ug_name, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_get_appid(handle, &appid);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("appid: %s\n", appid);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_uginfo(const char *ug_name, pkgmgrinfo_appinfo_h *handle);
+
+
+/**
+ * @fn int pkgmgrinfo_appinfo_get_aliasid(const char *app_id, char** alias_id)
+ * @brief	This API get alias_id for an appid from pkgmgr DB.
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	appid	pointer to application id
+ * @param[out] alias_id	pointer to pointer of alias id.
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		None
+ * @post		None
+ * @code
+static int get_app_aliasid(const char *appid)
+{
+	int ret = 0;
+	char *alias_id = NULL;
+	ret = pkgmgrinfo_appinfo_get_aliasid(appid, &alias_id);
+	if (ret != PMINFO_R_OK){
+		printf("Failed to get the aliasid for [%s]\n",appid);
+		return -1;
+	}
+	if(alias_id)
+		printf("aliasid: %s\n", alias_id);
+	else
+		printf("No alias_id found for %s\n",appid);
+
+	if(alias_id)
+		free(alias_id);
+	return ret;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_aliasid(const char* appid, char** alias_id);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_get_installed_time(pkgmgrinfo_appinfo_h handle, int *installed_time)
+ * @brief	This API gets the installed_time of the application
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] handle		pointer to the application info handle.
+ * @param[out] installed_time		pointer to hold installed_time
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @see		pkgmgrinfo_appinfo_is_multiple()
+ * @code
+static int get_app_installed_time(const char *appid)
+{
+	int ret = 0;
+	int installed_time = 0;
+	pkgmgrinfo_appinfo_h handle;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_get_installed_time(handle, &installed_time);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("installed_time: %d\n", installed_time);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_get_installed_time(pkgmgrinfo_appinfo_h handle, int *installed_time);
 
 /**
  * @fn	int pkgmgrinfo_appinfo_foreach_permission(pkgmgrinfo_appinfo_h handle,
@@ -4359,6 +4374,275 @@ static int get_app_process_pool(const char *appid)
  * @endcode
  */
 int pkgmgrinfo_appinfo_is_process_pool(pkgmgrinfo_appinfo_h handle, bool *process_pool);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_is_category_exist(pkgmgrinfo_appinfo_h handle, const char *category, bool *exist)
+ * @brief	This API checks if the application has the given category
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	handle	pointer to the application info handle
+ * @param[in]	category	category
+ * @param[out] exist		value Gets whether the application has the given category
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @code
+static int is_category_exist(const char *appid, const char *category)
+{
+	int ret = 0;
+	pkgmgrinfo_appinfo_h handle;
+	bool exist = false;
+
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+
+	ret = pkgmgrinfo_appinfo_is_category_exist(handle, category, &exist);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_is_category_exist(pkgmgrinfo_appinfo_h handle, const char *category, bool *exist);
+
+
+/**
+ * @fn int pkgmgrinfo_appinfo_is_multi_instance(pkgmgrinfo_appinfo_h handle, bool *multi_instance)
+ * @brief	This API gets the application 'multi_instance' value from the app ID
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	handle	pointer to application info handle
+ * @param[out] multi_instance		pointer to hold package multi_instance value
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @see		pkgmgrinfo_appinfo_is_multiple()
+ * @code
+static int get_app_multi_instance(const char *appid)
+{
+	int ret = 0;
+	bool multi_instance;
+	pkgmgrinfo_appinfo_h handle;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_is_multi_instance(handle, &multi_instance);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("app multi_instance: %d\n", multi_instance);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_is_multi_instance(pkgmgrinfo_appinfo_h handle, bool *multi_instance);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_is_multi_window(pkgmgrinfo_appinfo_h handle, bool *multi_window)
+ * @brief	This API gets the application 'multi_window' value from the app ID
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	handle	pointer to application info handle
+ * @param[out] multi_window		pointer to hold package multi_window value
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @see		pkgmgrinfo_appinfo_is_multiple()
+ * @code
+static int get_app_multi_window(const char *appid)
+{
+	int ret = 0;
+	bool multi_window;
+	pkgmgrinfo_appinfo_h handle;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_is_multi_window(handle, &multi_window);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("app multi_window: %d\n", multi_window);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_is_multi_window(pkgmgrinfo_appinfo_h handle, bool *multi_window);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_is_support_disable(pkgmgrinfo_appinfo_h handle, bool *support_disable)
+ * @brief	This API gets the application 'support_disable' value from the app ID
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	handle	pointer to application info handle
+ * @param[out] 	support_disable	pointer to hold package support_disable value
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @code
+static int get_app_support_disable(const char *appid)
+{
+	int ret = 0;
+	bool support_disable;
+	pkgmgrinfo_appinfo_h handle;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_is_support_disable(handle, &support_disable);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("app support_disable: %d\n", support_disable);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_is_support_disable(pkgmgrinfo_appinfo_h handle, bool *support_disable);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_is_ui_gadget(pkgmgrinfo_appinfo_h handle, bool *ui_gadget)
+ * @brief	This API gets the application 'ui_gadget' value from the app ID
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	handle	pointer to application info handle
+ * @param[out] 	ui_gadget	pointer to hold package ui_gadget value
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @code
+static int get_app_ui_gadget(const char *appid)
+{
+	int ret = 0;
+	bool ui_gadget;
+	pkgmgrinfo_appinfo_h handle = NULL;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_is_ui_gadget(handle, &ui_gadget);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("app ui_gadget: %d\n", ui_gadget);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_is_ui_gadget(pkgmgrinfo_appinfo_h handle, bool *ui_gadget);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_is_removable(pkgmgrinfo_appinfo_h handle, bool *removable)
+ * @brief	This API gets the application 'removable' value from the app ID
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	handle	pointer to application info handle
+ * @param[out] 	removable	pointer to hold package removable value
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @code
+static int get_app_removable(const char *appid)
+{
+	int ret = 0;
+	bool removable;
+	pkgmgrinfo_appinfo_h handle = NULL;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_is_removable(handle, &removable);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("app removable: %d\n", removable);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_is_removable(pkgmgrinfo_appinfo_h handle, bool *removable);
+
+/**
+ * @fn int pkgmgrinfo_appinfo_is_system(pkgmgrinfo_appinfo_h handle, bool *system)
+ * @brief	This API gets the application 'system' value from the app ID
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	handle	pointer to application info handle
+ * @param[out] 	system	pointer to hold package system value
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		pkgmgrinfo_appinfo_get_appinfo()
+ * @post		pkgmgrinfo_appinfo_destroy_appinfo()
+ * @see		pkgmgrinfo_appinfo_get_appid()
+ * @code
+static int get_app_system(const char *appid)
+{
+	int ret = 0;
+	bool system = false;
+	pkgmgrinfo_appinfo_h handle = NULL;
+	ret = pkgmgrinfo_appinfo_get_appinfo(appid, &handle);
+	if (ret != PMINFO_R_OK)
+		return -1;
+	ret = pkgmgrinfo_appinfo_is_system(handle, &system);
+	if (ret != PMINFO_R_OK) {
+		pkgmgrinfo_appinfo_destroy_appinfo(handle);
+		return -1;
+	}
+	printf("app system: %d\n", system);
+	pkgmgrinfo_appinfo_destroy_appinfo(handle);
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgrinfo_appinfo_is_system(pkgmgrinfo_appinfo_h handle, bool *system);
 
 /**
  * @fn int pkgmgrinfo_appinfo_destroy_appinfo(pkgmgrinfo_appinfo_h handle)
@@ -5116,598 +5400,6 @@ static int delete_cert_info(const char *pkgid)
  */
  int pkgmgrinfo_delete_certinfo(const char *pkgid);
 
-/**
- * @fn int pkgmgrinfo_create_pkgdbinfo(const char *pkgid, pkgmgrinfo_pkgdbinfo_h *handle)
- * @brief	This API creates the package db information handle to set data in db.
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] pkgid	pointer to the package ID.
- * @param[out] handle		pointer to the package db info handle.
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		None
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_version_to_pkgdbinfo(handle, "0.0.1");
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_create_pkgdbinfo(const char *pkgid, pkgmgrinfo_pkgdbinfo_h *handle);
-
-/**
- * @fn int pkgmgrinfo_set_type_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *type)
- * @brief	This API sets the package type in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] type		pointer to the package type.
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_version_to_pkgdbinfo()
- * @code
-static int set_pkg_type_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_type_to_pkgdbinfo(handle, "wgt");
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_type_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *type);
-
-/**
- * @fn int pkgmgrinfo_set_version_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *version)
- * @brief	This API sets the package version in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] version		pointer to the package version
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_version_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_version_to_pkgdbinfo(handle, "0.0.1");
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_version_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *version);
-
-/**
- * @fn int pkgmgrinfo_set_install_location_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, INSTALL_LOCATION location)
- * @brief	This API sets the package install location in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] location	package install location
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_install_location_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_install_location_to_pkgdbinfo(handle, INSTALL_INTERNAL);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_install_location_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, INSTALL_LOCATION location);
-
-/**
- * @fn int pkgmgrinfo_set_size_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *size)
- * @brief	This API sets the package size in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] size		pointer to the package size
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_size_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_size_to_pkgdbinfo(handle, "15");
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_size_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *size);
-
-/**
- * @fn int pkgmgrinfo_set_label_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *label, const char *locale)
- * @brief	This API sets the package label in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] label		pointer to the package label
- * @param[in] locale	pointer to the locale
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_label_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_label_to_pkgdbinfo(handle, "helloworld", "en-us");
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_label_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *label, const char *locale);
-
-/**
- * @fn int pkgmgrinfo_set_icon_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *icon, const char *locale)
- * @brief	This API sets the package icon in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] icon		pointer to the package icon
- * @param[in] locale	pointer to the locale
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_icon_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_icon_to_pkgdbinfo(handle, "helloworld.png", "en-us");
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_icon_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *icon, const char *locale);
-
-/**
- * @fn int pkgmgrinfo_set_description_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *description, const char *locale)
- * @brief	This API sets the package description in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] description		pointer to the package description
- * @param[in] locale	pointer to the locale
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_description_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_description_to_pkgdbinfo(handle, "helloworld application", "en-us");
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_description_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *description, const char *locale);
-
-/**
- * @fn int pkgmgrinfo_set_author_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *author_name,
- const char *author_email, const char *author_href, const char *locale)
- * @brief	This API sets the package author info in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] author_name		pointer to the package author name
- * @param[in] author_email		pointer to the package author email
- * @param[in] author_href		pointer to the package author href
- * @param[in] locale	pointer to the locale
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_author_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_author_to_pkgdbinfo(handle, "John", "john@samsung.com", "www.samsung.com", "en-us");
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_author_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *author_name,
-			const char *author_email, const char *author_href, const char *locale);
-
-/**
- * @fn int pkgmgrinfo_set_removable_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, int removable)
- * @brief	This API sets the package 'removable' value in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] removable		package removable value
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_removable_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_removable_to_pkgdbinfo(handle, 1);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_removable_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, int removable);
-
-/**
- * @fn int pkgmgrinfo_set_preload_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, int preload)
- * @brief	This API sets the package 'preload' value in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] preload		package preload value
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_preload_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_preload_to_pkgdbinfo(handle, 1);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_preload_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, int preload);
-
-/**
- * @fn int pkgmgrinfo_set_installed_storage_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, INSTALL_LOCATION location)
- * @brief	This API sets the package 'installed_storage' value in db handle
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle	pointer to the pkgdbinfo handle.
- * @param[in] location		installed_storage value
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @code
-static int set_pkg_installed_storage_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_installed_storage_to_pkgdbinfo(handle, INSTALL_INTERNAL);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_set_installed_storage_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, INSTALL_LOCATION location);
-
-/**
- * @fn int pkgmgrinfo_save_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle)
- * @brief	This API saves all the information from the handle to the DB.
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle		pointer to the package db info handle.
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		pkgmgrinfo_destroy_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_version_to_pkgdbinfo(handle, "0.0.1");
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_save_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle);
-
-/**
- * @fn int pkgmgrinfo_destroy_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle)
- * @brief	This API destroys the package db information handle freeing up all the resources
- *
- * @par		This API is for package-manager client application
- * @par Sync (or) Async : Synchronous API
- *
- * @param[in] handle		pointer to the package db info handle.
- * @return	0 if success, error code(<0) if fail
- * @retval	PMINFO_R_OK	success
- * @retval	PMINFO_R_EINVAL	invalid argument
- * @retval	PMINFO_R_ERROR	internal error
- * @pre		pkgmgrinfo_create_pkgdbinfo()
- * @post		None
- * @see		pkgmgrinfo_save_pkgdbinfo()
- * @see		pkgmgrinfo_set_type_to_pkgdbinfo()
- * @code
-static int set_pkg_in_db(const char *pkgid)
-{
-	int ret = 0;
-	pkgmgrinfo_pkgdbinfo_h handle;
-	ret = pkgmgrinfo_create_pkgdbinfo(pkgid, &handle);
-	if (ret != PMINFO_R_OK)
-		return -1;
-	ret = pkgmgrinfo_set_version_to_pkgdbinfo(handle, "0.0.1");
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	ret = pkgmgrinfo_save_pkgdbinfo(handle);
-	if (ret != PMINFO_R_OK) {
-		pkgmgrinfo_destroy_pkgdbinfo(handle);
-		return -1;
-	}
-	pkgmgrinfo_destroy_pkgdbinfo(handle);
-	return 0;
-}
- * @endcode
- */
-int pkgmgrinfo_destroy_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle);
-
 
 /**
  * @fn int pkgmgrinfo_create_certinfo_set_handle(pkgmgrinfo_instcertinfo_h *handle)
@@ -5874,23 +5566,36 @@ static int set_cert_in_db(const char *pkgid)
 int pkgmgrinfo_destroy_certinfo_set_handle(pkgmgrinfo_instcertinfo_h handle);
 
 /**
- * @fn int pkgmgrinfo_datacontrol_get_info(const char *providerid, const char * type, char **appid, char **access)
- * @brief	This API gets the datacontrol info
+ * @fn int pkgmgrinfo_pkginfo_set_preload(const char *pkgid, int preload)
+ * @brief	This API sets the package 'preload' value in db
  *
  * @par		This API is for package-manager client application
  * @par Sync (or) Async : Synchronous API
  *
- * @param[in] providerid		pointer to the providerid of dataconltrol.
- * @param[in] type			pointer to the type of dataconltrol.
- * @param[out] appid			pointer to hold appid, need to free after using
- * @param[out] access			pointer to hold access, need to free after using
+ * @param[in] pkgid			pointer to the package ID.
+ * @param[in] preload		package preload value
  * @return	0 if success, error code(<0) if fail
  * @retval	PMINFO_R_OK	success
  * @retval	PMINFO_R_EINVAL	invalid argument
  * @retval	PMINFO_R_ERROR	internal error
- * @endcode
  */
-int pkgmgrinfo_datacontrol_get_info(const char *providerid, const char * type, char **appid, char **access);
+int pkgmgrinfo_pkginfo_set_preload(const char *pkgid, int preload);
+
+/**
+ * @fn int pkgmgrinfo_pkginfo_set_installed_storage(const char *pkgid, INSTALL_LOCATION location)
+ * @brief	This API sets the package 'installed_storage' value in db
+ *
+ * @par		This API is for package-manager client application
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in] pkgid		pointer to the package ID.
+ * @param[in] location	package install location
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ */
+int pkgmgrinfo_pkginfo_set_installed_storage(const char *pkgid, INSTALL_LOCATION location);
 
 /**
  * @pkgmgrinfo client API
@@ -5906,20 +5611,6 @@ int pkgmgrinfo_datacontrol_get_info(const char *providerid, const char * type, c
 #define PMINFO_CLIENT_STATUS_MOVE						0x08
 #define PMINFO_CLIENT_STATUS_CLEAR_DATA					0x10
 #define PMINFO_CLIENT_STATUS_INSTALL_PROGRESS			0x20
-
-/**
- * @brief type definition.
- */
-typedef void pkgmgrinfo_client;
-typedef int (*pkgmgrinfo_handler)(int req_id, const char *pkg_type,
-				const char *pkgid, const char *key,
-				const char *val, const void *pmsg, void *data);
-
-typedef enum {
-	PMINFO_REQUEST = 0,
-	PMINFO_LISTENING,
-	PMINFO_BROADCAST,
-}pkgmgrinfo_client_type;
 
 /**
  * @brief	This APIs provides pkgmgrinfo client listener

@@ -1,0 +1,10 @@
+#!/bin/sh
+#--------------------------------------
+#    dump pkgmgr db
+#--------------------------------------
+
+PKGMGR_DB_DEBUG=$1/pkgmgr
+mkdir -p ${PKGMGR_DB_DEBUG}
+/bin/cp /opt/dbspace/.pkgmgr_cert.db* ${PKGMGR_DB_DEBUG}
+/bin/cp /opt/dbspace/.pkgmgr_parser.db* ${PKGMGR_DB_DEBUG}
+/bin/cp -r /opt/usr/data/pkgmgr/ ${PKGMGR_DB_DEBUG}

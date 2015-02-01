@@ -38,7 +38,7 @@
 
 #include "pkgmgr_parser_plugin.h"
 #include "pkgmgr-info.h"
-#include "pkgmgr-info-debug.h"
+#include "pkgmgrinfo_debug.h"
 
 #ifdef LOG_TAG
 #undef LOG_TAG
@@ -168,11 +168,9 @@ static void __metadata_parser_clear_dir_list(GList* dir_list)
 		while (list) {
 			detail = (__metadata_t *)list->data;
 			if (detail) {
-				if (detail->key)
-					free(detail->key);
-				if (detail->value)
-					free(detail->value);
-				free(detail);
+				FREE_AND_NULL(detail->key);
+				FREE_AND_NULL(detail->value);
+				FREE_AND_NULL(detail);
 			}
 			list = g_list_next(list);
 		}
@@ -190,10 +188,8 @@ static void __category_parser_clear_dir_list(GList* dir_list)
 		while (list) {
 			detail = (__category_t *)list->data;
 			if (detail) {
-				if (detail->name)
-					free(detail->name);
-
-				free(detail);
+				FREE_AND_NULL(detail->name);
+				FREE_AND_NULL(detail);
 			}
 			list = g_list_next(list);
 		}
@@ -296,8 +292,7 @@ int __ps_run_parser(xmlDocPtr docPtr, const char *tag,
 		_LOGD("[pkgid = %s, libpath = %s plugin success\n", pkgid, lib_path);
 
 END:
-	if (lib_path)
-		free(lib_path);
+	FREE_AND_NULL(lib_path);
 	if (lib_handle)
 		dlclose(lib_handle);
 	return ret;
@@ -305,16 +300,17 @@ END:
 
 static int __ps_get_enabled_plugin(const char *pkgid)
 {
-	char query[PKG_STRING_LEN_MAX] = { 0 };
+	char *query = NULL;
 	sqlite3_stmt *stmt = NULL;
 	const char *tail = NULL;
 	int rc = 0;
 	int enabled_plugin = 0;
 
-	sqlite3_snprintf(PKG_STRING_LEN_MAX, query, "select * from package_plugin_info where pkgid LIKE '%s'", pkgid);
+	query = sqlite3_mprintf("select * from package_plugin_info where pkgid LIKE %Q", pkgid);
 
 	if (SQLITE_OK != sqlite3_prepare(pkgmgr_parser_db, query, strlen(query), &stmt, &tail)) {
 		_LOGE("sqlite3_prepare error\n");
+		sqlite3_free(query);
 		return E_PKGMGR_PARSER_PLUGIN_MAX;
 	}
 
@@ -333,6 +329,7 @@ static int __ps_get_enabled_plugin(const char *pkgid)
 		goto FINISH_OFF;
 	}
 
+	sqlite3_free(query);
 	return enabled_plugin;
 
 FINISH_OFF:
@@ -340,7 +337,7 @@ FINISH_OFF:
 	if (rc != SQLITE_OK) {
 		_LOGE(" sqlite3_finalize failed - %d", rc);
 	}
-
+	sqlite3_free(query);
 	return E_PKGMGR_PARSER_PLUGIN_MAX;
 }
 
@@ -364,6 +361,9 @@ static char *__getvalue(const char* pBuf, const char* pKey)
 		return NULL;
 
 	char *pRes = (char*)malloc(len + 1);
+	if(pRes == NULL)
+		return NULL;
+
 	strncpy(pRes, pStart, len);
 	pRes[len] = 0;
 
@@ -374,14 +374,14 @@ static int __get_plugin_info_x(const char*buf, pkgmgr_parser_plugin_info_x *plug
 {
 	if (buf[0] == '#')
 		return -1;
-	
+
 	if (strstr(buf, TOKEN_TYPE_STR) == NULL)
 		return -1;
-	
+
 	plugin_info->type = __getvalue(buf, TOKEN_TYPE_STR);
 	if (plugin_info->type == NULL)
 		return -1;
-	
+
 	plugin_info->name = __getvalue(buf, TOKEN_NAME_STR);
 	plugin_info->flag = __getvalue(buf, TOKEN_FLAG_STR);
 	plugin_info->path = __getvalue(buf, TOKEN_PATH_STR);
@@ -394,23 +394,10 @@ void __clean_plugin_info(pkgmgr_parser_plugin_info_x *plugin_info)
 	if(plugin_info == NULL)
 		return;
 
-	if (plugin_info->filename){
-		free((void *)plugin_info->filename);
-		plugin_info->filename = NULL;
-	}
-
-	if (plugin_info->pkgid){
-		free((void *)plugin_info->pkgid);
-		plugin_info->pkgid = NULL;
-	}
-
-	if (plugin_info->appid){
-		free((void *)plugin_info->appid);
-		plugin_info->appid = NULL;
-	}
-
-	free((void *)plugin_info);
-	plugin_info = NULL;
+	FREE_AND_NULL(plugin_info->filename);
+	FREE_AND_NULL(plugin_info->pkgid);
+	FREE_AND_NULL(plugin_info->appid);
+	FREE_AND_NULL(plugin_info);
 	return;
 }
 
@@ -629,7 +616,10 @@ __process_tag_xml(pkgmgr_parser_plugin_info_x *plugin_info, xmlTextReaderPtr rea
 
 			if (strcmp(plugin_info->name, ASCII(elementName)) == 0) {
 				__run_tag_parser_prestep(plugin_info, reader);
-				break;
+			}
+			if(elementName != NULL){
+				xmlFree((void*)elementName);
+				elementName = NULL;
 			}
 			break;
 		}
@@ -642,7 +632,7 @@ __process_tag_xml(pkgmgr_parser_plugin_info_x *plugin_info, xmlTextReaderPtr rea
 static void __process_tag_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 {
 	xmlTextReaderPtr reader;
-	xmlDocPtr docPtr;
+	xmlDocPtr docPtr = NULL;
 	int ret = -1;
 
 	if (access(plugin_info->filename, R_OK) != 0) {
@@ -664,6 +654,11 @@ static void __process_tag_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 		} else {
 			_LOGS("%s : failed to read", plugin_info->filename);
 		}
+	}
+
+	if(docPtr != NULL){
+		xmlFreeDoc(docPtr);
+		docPtr = NULL;
 	}
 }
 
@@ -699,7 +694,7 @@ static void __process_category_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 				category_detail->name = (char*) calloc(1, sizeof(char)*(strlen(category->name)+2));
 				if (category_detail->name == NULL) {
 					_LOGD("Memory allocation failed\n");
-					free(category_detail);
+					FREE_AND_NULL(category_detail);
 					goto END;
 				}
 				snprintf(category_detail->name, (strlen(category->name)+1), "%s", category->name);
@@ -759,7 +754,7 @@ static void __process_metadata_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 				md_detail->key = (char*) calloc(1, sizeof(char)*(strlen(md->key)+2));
 				if (md_detail->key == NULL) {
 					_LOGD("Memory allocation failed\n");
-					free(md_detail);
+					FREE_AND_NULL(md_detail);
 					goto END;
 				}
 				snprintf(md_detail->key, (strlen(md->key)+1), "%s", md->key);
@@ -767,8 +762,8 @@ static void __process_metadata_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 				md_detail->value = (char*) calloc(1, sizeof(char)*(strlen(md->value)+2));
 				if (md_detail->value == NULL) {
 					_LOGD("Memory allocation failed\n");
-					free(md_detail->key);
-					free(md_detail);
+					FREE_AND_NULL(md_detail->key);
+					FREE_AND_NULL(md_detail);
 					goto END;
 				}
 				snprintf(md_detail->value, (strlen(md->value)+1), "%s", md->value);
@@ -867,10 +862,10 @@ void __process_all_plugins(pkgmgr_parser_plugin_info_x *plugin_info)
 		__process_each_plugin(plugin_info);
 
 		memset(buf, 0x00, PKG_STRING_LEN_MAX);
-		free(plugin_info->type);
-		free(plugin_info->name);
-		free(plugin_info->flag);
-		free(plugin_info->path);
+		FREE_AND_NULL(plugin_info->type);
+		FREE_AND_NULL(plugin_info->name);
+		FREE_AND_NULL(plugin_info->flag);
+		FREE_AND_NULL(plugin_info->path);
 	}
 
 	if (fp != NULL)
@@ -1011,10 +1006,10 @@ void _pkgmgr_parser_plugin_uninstall_plugin(const char *plugin_type, const char 
 		}
 
 		memset(buf, 0x00, PKG_STRING_LEN_MAX);
-		free(plugin_info->type);
-		free(plugin_info->name);
-		free(plugin_info->flag);
-		free(plugin_info->path);
+		FREE_AND_NULL(plugin_info->type);
+		FREE_AND_NULL(plugin_info->name);
+		FREE_AND_NULL(plugin_info->flag);
+		FREE_AND_NULL(plugin_info->path);
 	}
 
 	if (fp != NULL)

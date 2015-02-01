@@ -26,8 +26,8 @@
 #include <dlfcn.h>
 #include <dirent.h>
 
-#include "pkgmgr-info-internal.h"
-#include "pkgmgr-info-debug.h"
+#include "pkgmgrinfo_private.h"
+#include "pkgmgrinfo_debug.h"
 #include "pkgmgr-info.h"
 
 #include "pkgmgr_parser.h"
@@ -38,315 +38,53 @@
 #endif
 #define LOG_TAG "PKGMGR_DB"
 
-typedef struct _pkgmgr_datacontrol_x {
-	char *appid;
-	char *access;
-} pkgmgr_datacontrol_x;
-
-static int __datacontrol_cb(void *data, int ncols, char **coltxt, char **colname)
+static int __ail_set_installed_storage(const char *pkgid, INSTALL_LOCATION location)
 {
-	pkgmgr_datacontrol_x *info = (pkgmgr_datacontrol_x *)data;
-	int i = 0;
-	for(i = 0; i < ncols; i++)
-	{
-		if (strcmp(colname[i], "PACKAGE_NAME") == 0) {
-			if (coltxt[i])
-				info->appid = strdup(coltxt[i]);
-			else
-				info->appid = NULL;
-		} else if (strcmp(colname[i], "ACCESS") == 0 ){
-			if (coltxt[i])
-				info->access = strdup(coltxt[i]);
-			else
-				info->access = NULL;
-		} else
-			continue;
-	}
-	return 0;
-}
-
-static int __update_ail_appinfo(manifest_x * mfx)
-{
+	retvm_if(pkgid == NULL, PMINFO_R_EINVAL, "pkgid is NULL\n");
 	int ret = -1;
-	uiapplication_x *uiapplication = mfx->uiapplication;
-	void *lib_handle = NULL;
-	int (*ail_desktop_operation) (const char *appid, const char *property, const char *value, bool broadcast);
-	char *aop = NULL;
+	int exist = 0;
+	sqlite3 *ail_db = NULL;
+	char *AIL_DB_PATH = "/opt/dbspace/.app_info.db";
+	char *query = NULL;
 
-	if ((lib_handle = dlopen(LIBAIL_PATH, RTLD_LAZY)) == NULL) {
-		_LOGE("dlopen is failed LIBAIL_PATH[%s]\n", LIBAIL_PATH);
-		goto END;
+	ret = db_util_open(AIL_DB_PATH, &ail_db, 0);
+	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", AIL_DB_PATH);
+
+	/*Begin transaction*/
+	ret = sqlite3_exec(ail_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Failed to begin transaction\n");
+	_LOGD("Transaction Begin\n");
+
+	/*validate pkgid*/
+	query = sqlite3_mprintf("select exists(select * from app_info where x_slp_pkgid=%Q)", pkgid);
+	ret = __exec_db_query(ail_db, query, _pkgmgrinfo_validate_cb, (void *)&exist);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "sqlite3_exec[%s] fail", pkgid);
+	if (exist == 0) {
+		_LOGS("pkgid[%s] not found in DB", pkgid);
+		ret = PMINFO_R_ERROR;
+		goto catch;
 	}
+	sqlite3_free(query);
 
-	aop  = "ail_desktop_appinfo_modify_str";
+	query = sqlite3_mprintf("update app_info set x_slp_installedstorage=%Q where x_slp_pkgid=%Q", location?"installed_external":"installed_internal", pkgid);
 
-	if ((ail_desktop_operation =
-	     dlsym(lib_handle, aop)) == NULL || dlerror() != NULL) {
-		_LOGE("can not find symbol \n");
-		goto END;
+	ret = sqlite3_exec(ail_db, query, NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
+
+	/*Commit transaction*/
+	ret = sqlite3_exec(ail_db, "COMMIT", NULL, NULL, NULL);
+	if (ret != SQLITE_OK) {
+		_LOGE("Failed to commit transaction. Rollback now\n");
+		ret = sqlite3_exec(ail_db, "ROLLBACK", NULL, NULL, NULL);
+		tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
 	}
+	_LOGD("Transaction Commit and End\n");
 
-	for(; uiapplication; uiapplication=uiapplication->next) {
-		ret = ail_desktop_operation(uiapplication->appid, "AIL_PROP_X_SLP_INSTALLEDSTORAGE_STR", mfx->installed_storage, false);
-		if (ret != 0)
-			_LOGE("Failed to store info in DB\n");
-	}
-
-END:
-	if (lib_handle)
-		dlclose(lib_handle);
-
+	ret = PMINFO_R_OK;
+catch:
+	sqlite3_close(ail_db);
+	sqlite3_free(query);
 	return ret;
-}
-
-API int pkgmgrinfo_create_pkgdbinfo(const char *pkgid, pkgmgrinfo_pkgdbinfo_h *handle)
-{
-	retvm_if(!pkgid, PMINFO_R_EINVAL, "pkgid is NULL");
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	char *manifest = NULL;
-	manifest_x *mfx = NULL;
-
-	manifest = pkgmgr_parser_get_manifest_file(pkgid);
-	retvm_if(manifest == NULL, PMINFO_R_EINVAL, "pkg[%s] dont have manifest file", pkgid);
-
-	mfx = pkgmgr_parser_process_manifest_xml(manifest);
-	if (manifest) {
-		free(manifest);
-		manifest = NULL;
-	}
-	retvm_if(mfx == NULL, PMINFO_R_EINVAL, "pkg[%s] parsing fail", pkgid);
-
-	*handle = (void *)mfx;
-
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_type_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *type)
-{
-	retvm_if(!type, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	int len = strlen(type);
-	retvm_if(len > PKG_TYPE_STRING_LEN_MAX, PMINFO_R_EINVAL, "pkg type length exceeds the max limit");
-
-	manifest_x *mfx = (manifest_x *)handle;
-	free((void *)mfx->type);
-
-	mfx->type = strndup(type, PKG_TYPE_STRING_LEN_MAX);
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_version_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *version)
-{
-	retvm_if(!version, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	int len = strlen(version);
-	retvm_if(len > PKG_TYPE_STRING_LEN_MAX, PMINFO_R_EINVAL, "pkg type length exceeds the max limit");
-
-	manifest_x *mfx = (manifest_x *)handle;
-	free((void *)mfx->version);
-
-	mfx->version = strndup(version, PKG_VERSION_STRING_LEN_MAX);
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_install_location_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, INSTALL_LOCATION location)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	retvm_if((location < 0) || (location > 1), PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	manifest_x *mfx = (manifest_x *)handle;
-	free((void *)mfx->installlocation);
-
-	if (location == INSTALL_INTERNAL)
-		mfx->installlocation= strdup("internal-only");
-	else if (location == INSTALL_EXTERNAL)
-		mfx->installlocation= strdup("prefer-external");
-
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_size_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *size)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	retvm_if(size == NULL, PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	manifest_x *mfx = (manifest_x *)handle;
-
-	mfx->package_size = strdup(size);
-
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_label_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *label_txt, const char *locale)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	retvm_if(!label_txt, PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	int len = strlen(label_txt);
-	retvm_if(len > PKG_TYPE_STRING_LEN_MAX, PMINFO_R_EINVAL, "pkg type length exceeds the max limit");
-
-	manifest_x *mfx = (manifest_x *)handle;
-
-	label_x *label = calloc(1, sizeof(label_x));
-	retvm_if(label == NULL, PMINFO_R_EINVAL, "Malloc Failed");
-
-	LISTADD(mfx->label, label);
-	if (locale)
-		mfx->label->lang = strdup(locale);
-	else
-		mfx->label->lang = strdup(DEFAULT_LOCALE);
-	mfx->label->text = strdup(label_txt);
-
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_icon_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *icon_txt, const char *locale)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	retvm_if(!icon_txt, PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	int len = strlen(icon_txt);
-	retvm_if(len > PKG_TYPE_STRING_LEN_MAX, PMINFO_R_EINVAL, "pkg type length exceeds the max limit");
-
-	manifest_x *mfx = (manifest_x *)handle;
-
-	icon_x *icon = calloc(1, sizeof(icon_x));
-	retvm_if(icon == NULL, PMINFO_R_EINVAL, "Malloc Failed");
-
-	LISTADD(mfx->icon, icon);
-	if (locale)
-		mfx->icon->lang = strdup(locale);
-	else
-		mfx->icon->lang = strdup(DEFAULT_LOCALE);
-	mfx->icon->text = strdup(icon_txt);
-
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_description_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *desc_txt, const char *locale)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	retvm_if(!desc_txt, PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	int len = strlen(desc_txt);
-	retvm_if(len > PKG_TYPE_STRING_LEN_MAX, PMINFO_R_EINVAL, "pkg type length exceeds the max limit");
-
-	manifest_x *mfx = (manifest_x *)handle;
-
-	description_x *description = calloc(1, sizeof(description_x));
-	retvm_if(description == NULL, PMINFO_R_EINVAL, "Malloc Failed");
-
-	LISTADD(mfx->description, description);
-	if (locale)
-		mfx->description->lang = strdup(locale);
-	else
-		mfx->description->lang = strdup(DEFAULT_LOCALE);
-	mfx->description->text = strdup(desc_txt);
-
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_author_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, const char *author_name,
-		const char *author_email, const char *author_href, const char *locale)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	manifest_x *mfx = (manifest_x *)handle;
-	author_x *author = calloc(1, sizeof(author_x));
-	retvm_if(author == NULL, PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	LISTADD(mfx->author, author);
-	if (author_name)
-		mfx->author->text = strdup(author_name);
-	if (author_email)
-		mfx->author->email = strdup(author_email);
-	if (author_href)
-		mfx->author->href = strdup(author_href);
-	if (locale)
-		mfx->author->lang = strdup(locale);
-	else
-		mfx->author->lang = strdup(DEFAULT_LOCALE);
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_removable_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, int removable)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	retvm_if((removable < 0) || (removable > 1), PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	manifest_x *mfx = (manifest_x *)handle;
-	free((void *)mfx->removable);
-
-	if (removable == 0)
-		mfx->removable= strdup("false");
-	else if (removable == 1)
-		mfx->removable= strdup("true");
-
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_preload_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, int preload)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	retvm_if((preload < 0) || (preload > 1), PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	manifest_x *mfx = (manifest_x *)handle;
-
-	free((void *)mfx->preload);
-
-	if (preload == 0)
-		mfx->preload= strdup("false");
-	else if (preload == 1)
-		mfx->preload= strdup("true");
-
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_set_installed_storage_to_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle, INSTALL_LOCATION location)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-	retvm_if((location < 0) || (location > 1), PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	manifest_x *mfx = (manifest_x *)handle;
-
-	free((void *)mfx->installed_storage);
-
-	if (location == INSTALL_INTERNAL)
-		mfx->installed_storage= strdup("installed_internal");
-	else if (location == INSTALL_EXTERNAL)
-		mfx->installed_storage= strdup("installed_external");
-
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_save_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	int ret = 0;
-	manifest_x *mfx = NULL;
-	mfx = (manifest_x *)handle;
-
-	ret = pkgmgr_parser_update_manifest_info_in_db(mfx);
-	retvm_if(ret != 0, PMINFO_R_ERROR, "Failed to store info in DB\n");
-	
-	ret = __update_ail_appinfo(mfx);
-	retvm_if(ret != 0, PMINFO_R_ERROR, "Failed to store info in DB\n");
-
-	_LOGE("Successfully stored info in DB\n");
-	return PMINFO_R_OK;
-}
-
-API int pkgmgrinfo_destroy_pkgdbinfo(pkgmgrinfo_pkgdbinfo_h handle)
-{
-	retvm_if(!handle, PMINFO_R_EINVAL, "Argument supplied is NULL");
-
-	manifest_x *mfx = NULL;
-	mfx = (manifest_x *)handle;
-	pkgmgr_parser_free_manifest_xml(mfx);
-	return PMINFO_R_OK;
 }
 
 API int pkgmgrinfo_pkginfo_set_state_enabled(const char *pkgid, bool enabled)
@@ -355,106 +93,181 @@ API int pkgmgrinfo_pkginfo_set_state_enabled(const char *pkgid, bool enabled)
 	return 0;
 }
 
-API int pkgmgrinfo_appinfo_set_state_enabled(const char *appid, bool enabled)
+API int pkgmgrinfo_pkginfo_set_preload(const char *pkgid, int preload)
 {
-	retvm_if(appid == NULL, PMINFO_R_EINVAL, "appid is NULL\n");
+	retvm_if(pkgid == NULL, PMINFO_R_EINVAL, "pkgid is NULL\n");
 	int ret = -1;
+	int exist = 0;
 	sqlite3 *pkginfo_db = NULL;
+	char *query = NULL;
 
 	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
 	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
 
 	/*Begin transaction*/
 	ret = sqlite3_exec(pkginfo_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
-	if (ret != SQLITE_OK) {
-		_LOGE("Failed to begin transaction\n");
-		sqlite3_close(pkginfo_db);
-		return PMINFO_R_ERROR;
-	}
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Failed to begin transaction\n");
 	_LOGD("Transaction Begin\n");
 
-	char *query = sqlite3_mprintf("update package_app_info set app_enabled=%Q where app_id=%Q", enabled?"true":"false", appid);
-
-	char *error_message = NULL;
-	if (SQLITE_OK !=
-	    sqlite3_exec(pkginfo_db, query, NULL, NULL, &error_message)) {
-		_LOGE("Don't execute query = %s error message = %s\n", query,
-		       error_message);
-		sqlite3_free(error_message);
-		sqlite3_free(query);
-		return PMINFO_R_ERROR;
+	/*validate pkgid*/
+	query = sqlite3_mprintf("select exists(select * from package_info where package=%Q)", pkgid);
+	ret = __exec_db_query(pkginfo_db, query, _pkgmgrinfo_validate_cb, (void *)&exist);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "sqlite3_exec[%s] fail", pkgid);
+	if (exist == 0) {
+		_LOGS("pkgid[%s] not found in DB", pkgid);
+		ret = PMINFO_R_ERROR;
+		goto catch;
 	}
-	sqlite3_free(error_message);
+	sqlite3_free(query);
+
+	query = sqlite3_mprintf("update package_info set package_preload=%Q where package=%Q", preload?"true":"false", pkgid);
+
+	ret = sqlite3_exec(pkginfo_db, query, NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
 
 	/*Commit transaction*/
 	ret = sqlite3_exec(pkginfo_db, "COMMIT", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
 		_LOGE("Failed to commit transaction. Rollback now\n");
 		ret = sqlite3_exec(pkginfo_db, "ROLLBACK", NULL, NULL, NULL);
-		if (ret != SQLITE_OK)
-			_LOGE("Don't execute query = %s\n", query);
-		sqlite3_close(pkginfo_db);
-		sqlite3_free(query);
-		return PMINFO_R_ERROR;
+		tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
 	}
 	_LOGD("Transaction Commit and End\n");
+
+	ret = PMINFO_R_OK;
+catch:
 	sqlite3_close(pkginfo_db);
 	sqlite3_free(query);
-
-	return PMINFO_R_OK;
+	return ret;
 }
 
 
-API int pkgmgrinfo_datacontrol_get_info(const char *providerid, const char * type, char **appid, char **access)
+API int pkgmgrinfo_pkginfo_set_installed_storage(const char *pkgid, INSTALL_LOCATION location)
 {
-	retvm_if(providerid == NULL, PMINFO_R_EINVAL, "Argument supplied is NULL\n");
-	retvm_if(type == NULL, PMINFO_R_EINVAL, "Argument supplied is NULL\n");
-	retvm_if(appid == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
-	retvm_if(access == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
-	int ret = PMINFO_R_OK;
-	char *error_message = NULL;
-	pkgmgr_datacontrol_x *data = NULL;
+	retvm_if(pkgid == NULL, PMINFO_R_EINVAL, "pkgid is NULL\n");
+	int ret = -1;
+	int exist = 0;
+	sqlite3 *pkginfo_db = NULL;
+	char *query = NULL;
 
-	sqlite3 *datacontrol_info_db = NULL;
-
-	/*open db*/
-	ret = db_util_open(DATACONTROL_DB, &datacontrol_info_db, 0);
+	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
 	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
 
-	data = (pkgmgr_datacontrol_x *)calloc(1, sizeof(pkgmgr_datacontrol_x));
-	if (data == NULL) {
-		_LOGE("Failed to allocate memory for pkgmgr_datacontrol_x\n");
-		sqlite3_close(datacontrol_info_db);
-		return PMINFO_R_ERROR;
-	}
-	char *query = sqlite3_mprintf("select appinfo.package_name, datacontrol.access from appinfo, datacontrol where datacontrol.id=appinfo.unique_id and datacontrol.provider_id = %Q and datacontrol.type=%Q COLLATE NOCASE",
-		providerid, type);
+	/*Begin transaction*/
+	// Setting Manifest DB
+	ret = sqlite3_exec(pkginfo_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Failed to begin transaction\n");
+	_LOGD("Transaction Begin\n");
 
-	if (SQLITE_OK !=
-		sqlite3_exec(datacontrol_info_db, query, __datacontrol_cb, (void *)data, &error_message)) {
-		_LOGE("Don't execute query = %s error message = %s\n", query,
-			   error_message);
-		sqlite3_free(error_message);
-		sqlite3_free(query);
-		sqlite3_close(datacontrol_info_db);
-		return PMINFO_R_ERROR;
+	/*validate pkgid*/
+	query = sqlite3_mprintf("select exists(select * from package_info where package=%Q)", pkgid);
+	ret = __exec_db_query(pkginfo_db, query, _pkgmgrinfo_validate_cb, (void *)&exist);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "sqlite3_exec[%s] fail", pkgid);
+	if (exist == 0) {
+		_LOGS("pkgid[%s] not found in DB", pkgid);
+		ret = PMINFO_R_ERROR;
+		goto catch;
 	}
-
-	*appid = (char *)data->appid;
-	*access = (char *)data->access;
-	free(data);
 	sqlite3_free(query);
-	sqlite3_close(datacontrol_info_db);
 
-	return PMINFO_R_OK;
+	query = sqlite3_mprintf("select exists(select * from package_app_info where package=%Q)", pkgid);
+	ret = __exec_db_query(pkginfo_db, query, _pkgmgrinfo_validate_cb, (void *)&exist);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "sqlite3_exec[%s] fail", pkgid);
+	if (exist == 0) {
+		_LOGS("pkgid[%s] not found in DB", pkgid);
+		ret = PMINFO_R_ERROR;
+		goto catch;
+	}
+	sqlite3_free(query);
+
+	// pkgcakge_info table
+	query = sqlite3_mprintf("update package_info set installed_storage=%Q where package=%Q", location?"installed_external":"installed_internal", pkgid);
+
+	ret = sqlite3_exec(pkginfo_db, query, NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
+	sqlite3_free(query);
+
+	// package_app_info table
+	query = sqlite3_mprintf("update package_app_info set app_installed_storage=%Q where package=%Q", location?"installed_external":"installed_internal", pkgid);
+
+	ret = sqlite3_exec(pkginfo_db, query, NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
+
+	// Setting AIL DB
+	ret = __ail_set_installed_storage(pkgid, location);
+	tryvm_if(ret != PMINFO_R_OK, ret = PMINFO_R_ERROR, "Setting AIL DB failed.");
+
+	/*Commit transaction*/
+	ret = sqlite3_exec(pkginfo_db, "COMMIT", NULL, NULL, NULL);
+	if (ret != SQLITE_OK) {
+		_LOGE("Failed to commit transaction. Rollback now\n");
+		ret = sqlite3_exec(pkginfo_db, "ROLLBACK", NULL, NULL, NULL);
+		tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
+	}
+	_LOGD("Transaction Commit and End\n");
+
+	ret = PMINFO_R_OK;
+catch:
+	sqlite3_close(pkginfo_db);
+	sqlite3_free(query);
+	return ret;
+}
+
+API int pkgmgrinfo_appinfo_set_state_enabled(const char *appid, bool enabled)
+{
+	retvm_if(appid == NULL, PMINFO_R_EINVAL, "appid is NULL\n");
+	int ret = -1;
+	int exist = 0;
+	sqlite3 *pkginfo_db = NULL;
+	char *query = NULL;
+
+	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
+	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
+
+	/*Begin transaction*/
+	ret = sqlite3_exec(pkginfo_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Failed to begin transaction\n");
+	_LOGD("Transaction Begin\n");
+
+	/*validate appid*/
+	query = sqlite3_mprintf("select exists(select * from package_app_info where app_id=%Q)", appid);
+	ret = __exec_db_query(pkginfo_db, query, _pkgmgrinfo_validate_cb, (void *)&exist);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "sqlite3_exec[%s] fail", appid);
+	if (exist == 0) {
+		_LOGS("appid[%s] not found in DB", appid);
+		ret = PMINFO_R_ERROR;
+		goto catch;
+	}
+	sqlite3_free(query);
+
+	query = sqlite3_mprintf("update package_app_info set app_enabled=%Q where app_id=%Q", enabled?"true":"false", appid);
+
+	ret = sqlite3_exec(pkginfo_db, query, NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
+
+	/*Commit transaction*/
+	ret = sqlite3_exec(pkginfo_db, "COMMIT", NULL, NULL, NULL);
+	if (ret != SQLITE_OK) {
+		_LOGE("Failed to commit transaction. Rollback now\n");
+		ret = sqlite3_exec(pkginfo_db, "ROLLBACK", NULL, NULL, NULL);
+		tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
+	}
+	_LOGD("Transaction Commit and End\n");
+
+	ret = PMINFO_R_OK;
+catch:
+	sqlite3_close(pkginfo_db);
+	sqlite3_free(query);
+	return ret;
 }
 
 API int pkgmgrinfo_appinfo_set_default_label(const char *appid, const char *label)
 {
 	retvm_if(appid == NULL, PMINFO_R_EINVAL, "appid is NULL\n");
 	int ret = -1;
-	char *error_message = NULL;
+	int exist = 0;
 	sqlite3 *pkginfo_db = NULL;
+	char *query = NULL;
 
 	/*open db*/
 	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
@@ -462,38 +275,38 @@ API int pkgmgrinfo_appinfo_set_default_label(const char *appid, const char *labe
 
 	/*Begin transaction*/
 	ret = sqlite3_exec(pkginfo_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
-	if (ret != SQLITE_OK) {
-		_LOGE("Failed to begin transaction\n");
-		sqlite3_close(pkginfo_db);
-		return PMINFO_R_ERROR;
-	}
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Failed to begin transaction\n");
 	_LOGD("Transaction Begin\n");
 
-	char *query = sqlite3_mprintf("update package_app_localized_info set app_label=%Q where app_id=%Q", label, appid);
-
-	ret = sqlite3_exec(pkginfo_db, query, NULL, NULL, &error_message);
-	if (ret != SQLITE_OK) {
-		_LOGE("Don't execute query = %s error message = %s\n", query, error_message);
-		sqlite3_free(error_message);
-		sqlite3_free(query);
-		return PMINFO_R_ERROR;
+	/*validate appid*/
+	query = sqlite3_mprintf("select exists(select * from package_app_localized_info where app_id=%Q)", appid);
+	ret = __exec_db_query(pkginfo_db, query, _pkgmgrinfo_validate_cb, (void *)&exist);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "sqlite3_exec[%s] fail", appid);
+	if (exist == 0) {
+		_LOGS("appid[%s] not found in DB", appid);
+		ret = PMINFO_R_ERROR;
+		goto catch;
 	}
+	sqlite3_free(query);
+
+	query = sqlite3_mprintf("update package_app_localized_info set app_label=%Q where app_id=%Q", label, appid);
+
+	ret = sqlite3_exec(pkginfo_db, query, NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
 
 	/*Commit transaction*/
 	ret = sqlite3_exec(pkginfo_db, "COMMIT", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
 		_LOGE("Failed to commit transaction. Rollback now\n");
 		ret = sqlite3_exec(pkginfo_db, "ROLLBACK", NULL, NULL, NULL);
-		if (ret != SQLITE_OK)
-			_LOGE("Don't execute query = %s\n", query);
-		sqlite3_free(query);
-		sqlite3_close(pkginfo_db);
-		return PMINFO_R_ERROR;
+		tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
 	}
 	_LOGD("Transaction Commit and End\n");
+
+	ret = PMINFO_R_OK;
+catch:
 	sqlite3_free(query);
 	sqlite3_close(pkginfo_db);
-
-	return PMINFO_R_OK;
+	return ret;
 }
 

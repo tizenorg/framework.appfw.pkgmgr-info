@@ -46,6 +46,10 @@
 extern "C" {
 #endif
 #include "pkgmgr_parser.h"
+#include "pkgmgr_parser_feature.h"
+
+#define PKGMGR_PARSER_DB_FILE "/opt/dbspace/.pkgmgr_parser.db"
+#define PKGMGR_CERT_DB_FILE "/opt/dbspace/.pkgmgr_cert.db"
 
 /**
  * @fn int pkgmgr_parser_insert_manifest_info_in_db(manifest_x *mfx)
@@ -131,8 +135,10 @@ int pkgmgr_parser_initialize_db();
 int pkgmgr_parser_delete_pkgid_info_from_db(const char *pkgid);
 int pkgmgr_parser_delete_appid_info_from_db(const char *appid);
 
-int pkgmgr_parser_insert_disabled_pkg_info_in_db(manifest_x *mfx);
-int pkgmgr_parser_delete_disabled_pkgid_info_from_db(const char *pkgid);
+int pkgmgr_parser_update_enabled_pkg_info_in_db(const char *pkgid);
+int pkgmgr_parser_update_disabled_pkg_info_in_db(const char *pkgid);
+int pkgmgr_parser_insert_app_aliasid_info_in_db(void);
+int pkgmgr_parser_update_app_aliasid_info_in_db(void);
 
 /** @} */
 #ifdef __cplusplus

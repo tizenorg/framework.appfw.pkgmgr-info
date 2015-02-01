@@ -23,6 +23,210 @@
 
 #include "pkgmgrinfo_private.h"
 
+struct _pkginfo_str_map_t {
+	pkgmgrinfo_pkginfo_filter_prop_str prop;
+	const char *property;
+};
+
+static struct _pkginfo_str_map_t pkginfo_str_prop_map[] = {
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_ID,		PMINFO_PKGINFO_PROP_PACKAGE_ID},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_TYPE, 		PMINFO_PKGINFO_PROP_PACKAGE_TYPE},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_VERSION, 	PMINFO_PKGINFO_PROP_PACKAGE_VERSION},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_INSTALL_LOCATION,PMINFO_PKGINFO_PROP_PACKAGE_INSTALL_LOCATION},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_INSTALLED_STORAGE,PMINFO_PKGINFO_PROP_PACKAGE_INSTALLED_STORAGE},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_NAME, 	PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_NAME},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_EMAIL, 	PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_EMAIL},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_HREF, 	PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_HREF},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_STORECLIENT_ID, 	PMINFO_PKGINFO_PROP_PACKAGE_STORECLIENT_ID}
+};
+
+struct _pkginfo_int_map_t {
+	pkgmgrinfo_pkginfo_filter_prop_int prop;
+	const char *property;
+};
+
+static struct _pkginfo_int_map_t pkginfo_int_prop_map[] = {
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_SIZE,	PMINFO_PKGINFO_PROP_PACKAGE_SIZE},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_MODE,	PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_MODE}
+};
+
+struct _pkginfo_bool_map_t {
+	pkgmgrinfo_pkginfo_filter_prop_bool prop;
+	const char *property;
+};
+
+static struct _pkginfo_bool_map_t pkginfo_bool_prop_map[] = {
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_REMOVABLE,	PMINFO_PKGINFO_PROP_PACKAGE_REMOVABLE},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_PRELOAD,		PMINFO_PKGINFO_PROP_PACKAGE_PRELOAD},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_READONLY,	PMINFO_PKGINFO_PROP_PACKAGE_READONLY},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_UPDATE,		PMINFO_PKGINFO_PROP_PACKAGE_UPDATE},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_APPSETTING,	PMINFO_PKGINFO_PROP_PACKAGE_APPSETTING},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_NODISPLAY_SETTING,	PMINFO_PKGINFO_PROP_PACKAGE_NODISPLAY_SETTING},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_DISABLE,	PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_DISABLE},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_DISABLE,	PMINFO_PKGINFO_PROP_PACKAGE_DISABLE},
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_USE_RESET,	PMINFO_PKGINFO_PROP_PACKAGE_USE_RESET}
+};
+
+struct _appinfo_str_map_t {
+	pkgmgrinfo_appinfo_filter_prop_str prop;
+	const char *property;
+};
+
+static struct _appinfo_str_map_t appinfo_str_prop_map[] = {
+	{E_PMINFO_APPINFO_PROP_APP_ID,		PMINFO_APPINFO_PROP_APP_ID},
+	{E_PMINFO_APPINFO_PROP_APP_COMPONENT,	PMINFO_APPINFO_PROP_APP_COMPONENT},
+	{E_PMINFO_APPINFO_PROP_APP_EXEC, 	PMINFO_APPINFO_PROP_APP_EXEC},
+	{E_PMINFO_APPINFO_PROP_APP_ICON, 	PMINFO_APPINFO_PROP_APP_ICON},
+	{E_PMINFO_APPINFO_PROP_APP_TYPE, 	PMINFO_APPINFO_PROP_APP_TYPE},
+	{E_PMINFO_APPINFO_PROP_APP_OPERATION, 	PMINFO_APPINFO_PROP_APP_OPERATION},
+	{E_PMINFO_APPINFO_PROP_APP_URI, 	PMINFO_APPINFO_PROP_APP_URI},
+	{E_PMINFO_APPINFO_PROP_APP_MIME, 	PMINFO_APPINFO_PROP_APP_MIME},
+	{E_PMINFO_APPINFO_PROP_APP_CATEGORY, 	PMINFO_APPINFO_PROP_APP_CATEGORY},
+	{E_PMINFO_APPINFO_PROP_APP_HWACCELERATION,	PMINFO_APPINFO_PROP_APP_HWACCELERATION},
+	{E_PMINFO_APPINFO_PROP_APP_SCREENREADER,	PMINFO_APPINFO_PROP_APP_SCREENREADER}
+};
+
+struct _appinfo_int_map_t {
+	pkgmgrinfo_appinfo_filter_prop_int prop;
+	const char *property;
+};
+
+static struct _appinfo_int_map_t appinfo_int_prop_map[] = {
+	{E_PMINFO_APPINFO_PROP_APP_SUPPORT_MODE,	PMINFO_APPINFO_PROP_APP_SUPPORT_MODE}
+};
+
+struct _appinfo_bool_map_t {
+	pkgmgrinfo_appinfo_filter_prop_bool prop;
+	const char *property;
+};
+
+static struct _appinfo_bool_map_t appinfo_bool_prop_map[] = {
+	{E_PMINFO_APPINFO_PROP_APP_NODISPLAY,		PMINFO_APPINFO_PROP_APP_NODISPLAY},
+	{E_PMINFO_APPINFO_PROP_APP_MULTIPLE,		PMINFO_APPINFO_PROP_APP_MULTIPLE},
+	{E_PMINFO_APPINFO_PROP_APP_ONBOOT,		PMINFO_APPINFO_PROP_APP_ONBOOT},
+	{E_PMINFO_APPINFO_PROP_APP_AUTORESTART,		PMINFO_APPINFO_PROP_APP_AUTORESTART},
+	{E_PMINFO_APPINFO_PROP_APP_TASKMANAGE,		PMINFO_APPINFO_PROP_APP_TASKMANAGE},
+	{E_PMINFO_APPINFO_PROP_APP_LAUNCHCONDITION,		PMINFO_APPINFO_PROP_APP_LAUNCHCONDITION},
+	{E_PMINFO_APPINFO_PROP_APP_SUPPORT_DISABLE,		PMINFO_APPINFO_PROP_APP_SUPPORT_DISABLE},
+	{E_PMINFO_APPINFO_PROP_APP_DISABLE,		PMINFO_APPINFO_PROP_APP_DISABLE},
+	{E_PMINFO_APPINFO_PROP_APP_REMOVABLE,		PMINFO_APPINFO_PROP_APP_REMOVABLE}
+};
+
+inline int _pkgmgrinfo_validate_cb(void *data, int ncols, char **coltxt, char **colname)
+{
+	int *p = (int*)data;
+	*p = atoi(coltxt[0]);
+	return 0;
+}
+
+inline pkgmgrinfo_pkginfo_filter_prop_str _pminfo_pkginfo_convert_to_prop_str(const char *property)
+{
+	int i = 0;
+	int max = 0;
+	pkgmgrinfo_pkginfo_filter_prop_str prop = -1;
+
+	if (property == NULL)
+		return -1;
+	max = E_PMINFO_PKGINFO_PROP_PACKAGE_MAX_STR - E_PMINFO_PKGINFO_PROP_PACKAGE_MIN_STR + 1;
+	for (i = 0 ; i < max; i++) {
+		if (strcmp(property, pkginfo_str_prop_map[i].property) == 0) {
+			prop =	pkginfo_str_prop_map[i].prop;
+			break;
+		}
+	}
+	return prop;
+}
+
+inline pkgmgrinfo_pkginfo_filter_prop_int _pminfo_pkginfo_convert_to_prop_int(const char *property)
+{
+	int i = 0;
+	int max = 0;
+	pkgmgrinfo_pkginfo_filter_prop_int prop = -1;
+
+	if (property == NULL)
+		return -1;
+	max = E_PMINFO_PKGINFO_PROP_PACKAGE_MAX_INT - E_PMINFO_PKGINFO_PROP_PACKAGE_MIN_INT + 1;
+	for (i = 0 ; i < max; i++) {
+		if (strcmp(property, pkginfo_int_prop_map[i].property) == 0) {
+			prop =	pkginfo_int_prop_map[i].prop;
+			break;
+		}
+	}
+	return prop;
+}
+
+inline pkgmgrinfo_pkginfo_filter_prop_bool _pminfo_pkginfo_convert_to_prop_bool(const char *property)
+{
+	int i = 0;
+	int max = 0;
+	pkgmgrinfo_pkginfo_filter_prop_bool prop = -1;
+
+	if (property == NULL)
+		return -1;
+	max = E_PMINFO_PKGINFO_PROP_PACKAGE_MAX_BOOL - E_PMINFO_PKGINFO_PROP_PACKAGE_MIN_BOOL + 1;
+	for (i = 0 ; i < max; i++) {
+		if (strcmp(property, pkginfo_bool_prop_map[i].property) == 0) {
+			prop =	pkginfo_bool_prop_map[i].prop;
+			break;
+		}
+	}
+	return prop;
+}
+
+inline pkgmgrinfo_appinfo_filter_prop_str _pminfo_appinfo_convert_to_prop_str(const char *property)
+{
+	int i = 0;
+	int max = 0;
+	pkgmgrinfo_appinfo_filter_prop_str prop = -1;
+
+	if (property == NULL)
+		return -1;
+	max = E_PMINFO_APPINFO_PROP_APP_MAX_STR - E_PMINFO_APPINFO_PROP_APP_MIN_STR + 1;
+	for (i = 0 ; i < max; i++) {
+		if (strcmp(property, appinfo_str_prop_map[i].property) == 0) {
+			prop =	appinfo_str_prop_map[i].prop;
+			break;
+		}
+	}
+	return prop;
+}
+
+inline pkgmgrinfo_appinfo_filter_prop_int _pminfo_appinfo_convert_to_prop_int(const char *property)
+{
+	int i = 0;
+	int max = 0;
+	pkgmgrinfo_appinfo_filter_prop_int prop = -1;
+
+	if (property == NULL)
+		return -1;
+	max = E_PMINFO_APPINFO_PROP_APP_MAX_INT - E_PMINFO_APPINFO_PROP_APP_MIN_INT + 1;
+	for (i = 0 ; i < max; i++) {
+		if (strcmp(property, appinfo_int_prop_map[i].property) == 0) {
+			prop =	appinfo_int_prop_map[i].prop;
+			break;
+		}
+	}
+	return prop;
+}
+
+inline pkgmgrinfo_appinfo_filter_prop_bool _pminfo_appinfo_convert_to_prop_bool(const char *property)
+{
+	int i = 0;
+	int max = 0;
+	pkgmgrinfo_appinfo_filter_prop_bool prop = -1;
+
+	if (property == NULL)
+		return -1;
+	max = E_PMINFO_APPINFO_PROP_APP_MAX_BOOL - E_PMINFO_APPINFO_PROP_APP_MIN_BOOL + 1;
+	for (i = 0 ; i < max; i++) {
+		if (strcmp(property, appinfo_bool_prop_map[i].property) == 0) {
+			prop =	appinfo_bool_prop_map[i].prop;
+			break;
+		}
+	}
+	return prop;
+}
+
 int __exec_db_query(sqlite3 *db, char *query, sqlite_query_callback callback, void *data)
 {
 	char *error_message = NULL;
@@ -37,18 +241,32 @@ int __exec_db_query(sqlite3 *db, char *query, sqlite_query_callback callback, vo
 	return 0;
 }
 
+void __cleanup_list_pkginfo(pkgmgr_pkginfo_x *list_pkginfo, pkgmgr_pkginfo_x *node)
+{
+	pkgmgr_pkginfo_x *temp_node = NULL;
+
+	if (list_pkginfo != NULL) {
+		LISTHEAD(list_pkginfo, node);
+		temp_node = node->next;
+		node = temp_node;
+		while (node) {
+			temp_node = node->next;
+			__cleanup_pkginfo(node);
+			node = temp_node;
+		}
+		__cleanup_pkginfo(list_pkginfo);
+	}
+}
+
 void __cleanup_pkginfo(pkgmgr_pkginfo_x *data)
 {
 	if(data == NULL)
 		return;
-	if (data->locale){
-		free((void *)data->locale);
-		data->locale = NULL;
-	}
 
-	pkgmgr_parser_free_manifest_xml(data->manifest_info);
-	free((void *)data);
-	data = NULL;
+	FREE_AND_NULL(data->locale);
+
+	_pkgmgrinfo_basic_free_manifest_x(data->manifest_info);
+	FREE_AND_NULL(data);
 	return;
 }
 
@@ -56,23 +274,13 @@ void __cleanup_appinfo(pkgmgr_appinfo_x *data)
 {
 	if(data == NULL)
 		return;
-	if (data->package){
-		free((void *)data->package);
-		data->package = NULL;
-	}
-	if (data->locale){
-		free((void *)data->locale);
-		data->locale = NULL;
-	}
+
+	FREE_AND_NULL(data->locale);
 
 	manifest_x *mfx = calloc(1, sizeof(manifest_x));
-	if (data->app_component == PMINFO_UI_APP)
-		mfx->uiapplication = data->uiapp_info;
-	else if (data->app_component == PMINFO_SVC_APP)
-		mfx->serviceapplication = data->svcapp_info;
-	pkgmgr_parser_free_manifest_xml(mfx);
-	free((void *)data);
-	data = NULL;
+	mfx->uiapplication = data->uiapp_info;
+	_pkgmgrinfo_basic_free_manifest_x(mfx);
+	FREE_AND_NULL(data);
 	return;
 }
 
@@ -90,13 +298,13 @@ char* __convert_system_locale_to_manifest_locale()
 	char *locale = malloc(6);
 	if (!locale) {
 		_LOGE("Malloc Failed\n");
-		free(syslocale);
+		FREE_AND_NULL(syslocale);
 		return strdup(DEFAULT_LOCALE);
 	}
 
 	sprintf(locale, "%c%c-%c%c", syslocale[0], syslocale[1], tolower(syslocale[3]), tolower(syslocale[4]));
 
-	free(syslocale);
+	FREE_AND_NULL(syslocale);
 	return locale;
 }
 
@@ -140,6 +348,9 @@ void __get_filter_condition(gpointer data, char **condition)
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_HREF:
 		snprintf(buf, MAX_QUERY_LEN, "package_info.author_href='%s'", node->value);
 		break;
+	case E_PMINFO_PKGINFO_PROP_PACKAGE_STORECLIENT_ID:
+		snprintf(buf, MAX_QUERY_LEN, "package_info.storeclient_id='%s'", node->value);
+		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_EMAIL:
 		snprintf(buf, MAX_QUERY_LEN, "package_info.author_email='%s'", node->value);
 		break;
@@ -163,6 +374,18 @@ void __get_filter_condition(gpointer data, char **condition)
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_NODISPLAY_SETTING:
 		snprintf(buf, MAX_QUERY_LEN, "package_info.package_nodisplay IN %s", node->value);
+		break;
+	case E_PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_DISABLE:
+		snprintf(buf, MAX_QUERY_LEN, "package_info.package_support_disable IN %s", node->value);
+		break;
+	case E_PMINFO_PKGINFO_PROP_PACKAGE_DISABLE:
+		snprintf(buf, MAX_QUERY_LEN, "package_info.package_disable IN %s", node->value);
+		break;
+	case E_PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_MODE:
+		snprintf(buf, MAX_QUERY_LEN, "package_info.package_support_mode & %s", node->value);
+		break;
+	case E_PMINFO_PKGINFO_PROP_PACKAGE_USE_RESET:
+		snprintf(buf, MAX_QUERY_LEN, "package_info.package_reserve2 IN %s", node->value);
 		break;
 
 	case E_PMINFO_APPINFO_PROP_APP_ID:
@@ -220,6 +443,18 @@ void __get_filter_condition(gpointer data, char **condition)
 	case E_PMINFO_APPINFO_PROP_APP_LAUNCHCONDITION:
 		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_launchcondition IN %s", node->value);
 		break;
+	case E_PMINFO_APPINFO_PROP_APP_SUPPORT_DISABLE:
+		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_support_disable IN %s", node->value);
+		break;
+	case E_PMINFO_APPINFO_PROP_APP_DISABLE:
+		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_disable IN %s", node->value);
+		break;
+	case E_PMINFO_APPINFO_PROP_APP_REMOVABLE:
+		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_removable IN %s", node->value);
+		break;
+	case E_PMINFO_APPINFO_PROP_APP_SUPPORT_MODE:
+		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_support_mode & %s", node->value);
+		break;
 	default:
 		_LOGE("Invalid Property Type\n");
 		*condition = NULL;
@@ -251,10 +486,7 @@ int __appinfo_check_installed_storage(pkgmgr_appinfo_x *appinfo)
 	char buf[MAX_QUERY_LEN] = {'\0'};
 	char pkgid[MAX_QUERY_LEN] = {'\0'};
 
-	if (appinfo->package != NULL)
-		snprintf(pkgid, MAX_QUERY_LEN - 1, "%s", appinfo->package);
-	else
-		snprintf(pkgid, MAX_QUERY_LEN - 1, "%s", appinfo->uiapp_info->package);
+	snprintf(pkgid, MAX_QUERY_LEN - 1, "%s", appinfo->uiapp_info->package);
 
 	retvm_if(appinfo->uiapp_info->installed_storage == NULL, PMINFO_R_ERROR, "installed_storage is NULL\n");
 

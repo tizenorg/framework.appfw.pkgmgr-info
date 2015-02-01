@@ -17,14 +17,14 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src ${CMAKE_
 
 ### Required packages
 INCLUDE(FindPkgConfig)
-pkg_check_modules(pkgs REQUIRED glib-2.0 dlog vconf sqlite3 db-util libxml-2.0 dbus-1 dbus-glib-1)
+pkg_check_modules(pkgs REQUIRED openssl glib-2.0 dlog vconf sqlite3 db-util libxml-2.0 dbus-1 dbus-glib-1 journal)
 
 FOREACH(flag ${pkgs_CFLAGS})
 	SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
 ENDFOREACH(flag)
 
 
-pkg_check_modules(libpkgs REQUIRED glib-2.0 dlog vconf sqlite3 db-util libxml-2.0 dbus-1 dbus-glib-1)
+pkg_check_modules(libpkgs REQUIRED openssl glib-2.0 dlog vconf sqlite3 db-util libxml-2.0 dbus-1 dbus-glib-1 journal)
 
 FOREACH(flag ${libpkgs_CFLAGS})
 	SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
@@ -47,7 +47,10 @@ add_subdirectory(parser)
 ## build pkgmgr-info library
 add_library(pkgmgr-info SHARED 	src/pkgmgrinfo_client.c src/pkgmgrinfo_db.c src/pkgmgrinfo_certinfo.c
 								src/pkgmgrinfo_appinfo.c src/pkgmgrinfo_pkginfo.c
-								src/pkgmgrinfo_private.c src/pkgmgr-info-internal.c)
+								src/pkgmgrinfo_private.c
+								src/pkgmgrinfo_basic.c
+								src/pkgmgrinfo_feature.c
+								)
 
 
 SET_TARGET_PROPERTIES(pkgmgr-info PROPERTIES SOVERSION ${VERSION_MAJOR})
@@ -58,8 +61,14 @@ CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/pkgmgr-info.pc.in ${CMAKE_BINARY_DIR}/pkgmgr-
 configure_file(parser_path.conf.in parser_path.conf @ONLY)
 configure_file(pkgmgr-info.manifest.in pkgmgr-info.manifest @ONLY)
 configure_file(pkgmgr-parser.manifest.in pkgmgr-parser.manifest @ONLY)
+configure_file(dump_pkgmgr.sh.in dump_pkgmgr.sh @ONLY)
 
 INSTALL(TARGETS pkgmgr-info DESTINATION ${LIB_INSTALL_DIR} COMPONENT RuntimeLibraries)
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/pkgmgr-info.pc DESTINATION ${LIB_INSTALL_DIR}/pkgconfig)
 INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/pkgmgr-info.h DESTINATION include)
+INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/pkgmgrinfo_basic.h DESTINATION include)
+INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/pkgmgrinfo_feature.h DESTINATION include)
+INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/pkgmgrinfo_type.h DESTINATION include)
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/parser_path.conf DESTINATION ${PREFIX}/etc/package-manager/)
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/dump_pkgmgr.sh DESTINATION /opt/etc/dump.d/module.d/)
+
