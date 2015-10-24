@@ -43,7 +43,8 @@
 
 #include <libxml/xmlreader.h>
 #include "pkgmgrinfo_basic.h"
-#include "pkgmgr_parser_feature.h"
+#include "pkgmgrinfo_type.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,20 +58,15 @@ extern "C" {
 
 #define SCHEMA_FILE "/usr/etc/package-manager/preload/manifest.xsd"
 
+#ifdef _APPFW_FEATURE_DELTA_UPDATE
+#define DELTA_INFO_SCHEMA_FILE "/usr/etc/package-manager/preload/delta_info.xsd"
+#define DELTA_INFO_XML "delta_info.xml"
+#endif
+
 #define BUFMAX 1024*128
 
 /* so path */
 #define LIBAPPSVC_PATH "/usr/lib/libappsvc.so.0"
-#define LIBAIL_PATH "/usr/lib/libail.so.0"
-
-/** Integer property for mode*/
-#define	PMINFO_SUPPORT_MODE_ULTRA_POWER_SAVING	0x00000001
-#define	PMINFO_SUPPORT_MODE_COOL_DOWN			0x00000002
-#define	PMINFO_SUPPORT_MODE_SCREEN_READER		0x00000004
-
-#define	PMINFO_SUPPORT_FEATURE_MULTI_WINDOW			0x00000001
-#define	PMINFO_SUPPORT_FEATURE_OOM_TERMINATION		0x00000002
-#define	PMINFO_SUPPORT_FEATURE_LARGE_MEMORY			0x00000004
 
 /* operation_type */
 typedef enum {
@@ -80,15 +76,6 @@ typedef enum {
 	ACTION_FOTA,
 	ACTION_MAX
 } ACTION_TYPE;
-
-typedef enum {
-	AIL_INSTALL = 0,
-	AIL_UPDATE,
-	AIL_REMOVE,
-	AIL_CLEAN,
-	AIL_FOTA,
-	AIL_MAX
-} AIL_TYPE;
 
 /**
  * @brief API return values
@@ -521,6 +508,34 @@ static int parse_disabled_pkg_file_for_uninstallation(const char *pkgid)
 int pkgmgr_parser_disable_pkg(const char *pkgid, char *const tagv[]);
 
 /**
+ * @fn int pkgmgr_parser_set_app_background_operation(const char *appid, bool is_disable)
+ * @brief	This API updates the background operation flag of the application's DB.
+ *
+ * @par		This API is for package-manager.
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	pkgid	pointer to pkgid
+ * @param[in]	is_disable		disable/enable application's background operation
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_EINVAL	invalid argument
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		None
+ * @post		None
+ * @code
+static int enable_app_bg_operation(const char *pkgid)
+{
+	int ret = 0;
+	ret = pkgmgr_parser_set_app_background_operation(pkgid, FALSE);
+	if (ret)
+		return -1;
+	return 0;
+}
+ * @endcode
+ */
+int pkgmgr_parser_set_app_background_operation(const char *appid, bool is_disable);
+
+/**
  * @fn int pkgmgr_parser_insert_app_aliasid(void)
  * @brief	This API updates the app aliasid table.
  *
@@ -569,6 +584,62 @@ static int parse_update_app_aliasid(void)
  * @endcode
  */
 int pkgmgr_parser_update_app_aliasid(void );
+
+#ifdef _APPFW_FEATURE_EXPANSION_PKG_INSTALL
+/**
+ * @fn int pkgmgr_parser_insert_tep(const char *pkgid, const char *tep_name)
+ * @brief	This API inserts the tep name in the db.
+ *
+ * @par		This API is for package manager.
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	pkgid	pointer to pkgid
+ * @param[in]	tep_name 	pointer to tep name
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		None
+ * @post		None
+ */
+int pkgmgr_parser_insert_tep(const char *pkgid, const char *tep_name);
+
+/**
+ * @fn int pkgmgr_parser_update_tep(const char *pkgid, const char *tep_name)
+ * @brief	This API update the tep name in the db.
+ *
+ * @par		This API is for package manager.
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	pkgid	pointer to pkgid
+ * @param[in]	tep_name 	pointer to updated tep name
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		None
+ * @post		None
+ */
+int pkgmgr_parser_update_tep(const char *pkgid, const char *tep_name);
+
+/**
+ * @fn int pkgmgr_parser_delete_tep(const char *pkgid)
+ * @brief	This API delete the tep path in the db.
+ *
+ * @par		This API is for package manager.
+ * @par Sync (or) Async : Synchronous API
+ *
+ * @param[in]	pkgid	pointer to pkgid
+ * @return	0 if success, error code(<0) if fail
+ * @retval	PMINFO_R_OK	success
+ * @retval	PMINFO_R_ERROR	internal error
+ * @pre		None
+ * @post		None
+ */
+int pkgmgr_parser_delete_tep(const char *pkgid);
+#endif
+
+#ifdef _APPFW_FEATURE_MOUNT_INSTALL
+int pkgmgr_parser_insert_mount_install_info(const char *pkgid, bool ismount, const char *tpk_name);
+#endif
 
 /** @} */
 #ifdef __cplusplus

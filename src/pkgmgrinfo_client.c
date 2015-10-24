@@ -127,6 +127,28 @@ catch:
 	return ret;
 }
 
+API int pkgmgrinfo_client_listen_status_with_zone(pkgmgrinfo_client *pc, pkgmgrinfo_handler_zone event_cb, void *data)
+{
+	int ret = 0;
+	char *errmsg = NULL;
+	void *handle = NULL;
+	int (*__pkgmgr_client_listen_status_with_zone)(pkgmgrinfo_client *pc, pkgmgrinfo_handler_zone event_cb, void *data) = NULL;
+
+	handle = dlopen("libpkgmgr-client.so.0", RTLD_LAZY | RTLD_GLOBAL);
+	retvm_if(!handle, PMINFO_R_ERROR, "dlopen() failed. [%s]", dlerror());
+
+	__pkgmgr_client_listen_status_with_zone = dlsym(handle, "pkgmgr_client_listen_status_with_zone");
+	errmsg = dlerror();
+	tryvm_if((errmsg != NULL) || (__pkgmgr_client_listen_status_with_zone == NULL), ret = PMINFO_R_ERROR, "dlsym() failed. [%s]", errmsg);
+
+	ret = __pkgmgr_client_listen_status_with_zone(pc, event_cb, data);
+	tryvm_if(ret < 0, ret = PMINFO_R_ERROR, "pkgmgr_client_new failed.");
+
+catch:
+//	dlclose(handle);
+	return ret;
+}
+
 API int pkgmgrinfo_client_free(pkgmgrinfo_client *pc)
 {
 	int ret = 0;

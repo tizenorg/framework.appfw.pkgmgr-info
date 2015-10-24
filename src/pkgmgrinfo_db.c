@@ -25,7 +25,11 @@
 #include <db-util.h>
 #include <dlfcn.h>
 #include <dirent.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
 
+#include <vasum.h>
 #include "pkgmgrinfo_private.h"
 #include "pkgmgrinfo_debug.h"
 #include "pkgmgr-info.h"
@@ -38,53 +42,138 @@
 #endif
 #define LOG_TAG "PKGMGR_DB"
 
-static int __ail_set_installed_storage(const char *pkgid, INSTALL_LOCATION location)
+#define OPT_USR_APPS		__pkgmgrinfo_get_apps_path()
+
+#define _DEFAULT_MANIFEST_DB		"/opt/dbspace/.pkgmgr_parser.db"
+#define _DEFAULT_CERT_DB			"/opt/dbspace/.pkgmgr_cert.db"
+#define _DEFAULT_DATACONTROL_DB		"/opt/usr/dbspace/.app-package.db"
+#define _DEFAULT_SD_PATH			"/opt/storage/sdcard/app2sd/"
+#define _DEFAULT_OPT_USR_APPS		"/opt/usr/apps"
+
+static char *_manifest_db = NULL;
+static char *_cert_db = NULL;
+static char *_data_control_db = NULL;
+static char *_sd_path = NULL;
+static char *_apps_path = NULL;
+static char *_cur_zone = NULL;
+
+static const char *__pkgmgrinfo_get_apps_path();
+
+const char *__pkgmgrinfo_get_default_manifest_db()
 {
-	retvm_if(pkgid == NULL, PMINFO_R_EINVAL, "pkgid is NULL\n");
-	int ret = -1;
-	int exist = 0;
-	sqlite3 *ail_db = NULL;
-	char *AIL_DB_PATH = "/opt/dbspace/.app_info.db";
-	char *query = NULL;
+	if (_manifest_db == NULL)
+		return _DEFAULT_MANIFEST_DB;
 
-	ret = db_util_open(AIL_DB_PATH, &ail_db, 0);
-	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", AIL_DB_PATH);
+	return _manifest_db;
+}
 
-	/*Begin transaction*/
-	ret = sqlite3_exec(ail_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
-	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Failed to begin transaction\n");
-	_LOGD("Transaction Begin\n");
+const char *__pkgmgrinfo_get_default_cert_db()
+{
+	if (_cert_db == NULL)
+		return _DEFAULT_CERT_DB;
 
-	/*validate pkgid*/
-	query = sqlite3_mprintf("select exists(select * from app_info where x_slp_pkgid=%Q)", pkgid);
-	ret = __exec_db_query(ail_db, query, _pkgmgrinfo_validate_cb, (void *)&exist);
-	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "sqlite3_exec[%s] fail", pkgid);
-	if (exist == 0) {
-		_LOGS("pkgid[%s] not found in DB", pkgid);
-		ret = PMINFO_R_ERROR;
-		goto catch;
+	return _cert_db;
+}
+
+const char *__pkgmgrinfo_get_default_data_control_db()
+{
+	if (_data_control_db == NULL)
+		return _DEFAULT_DATACONTROL_DB;
+
+	return _data_control_db;
+}
+
+const char *__pkgmgrinfo_get_default_sd_path()
+{
+	if (_sd_path == NULL)
+		return _DEFAULT_SD_PATH;
+
+	return _sd_path;
+}
+
+static const char *__pkgmgrinfo_get_apps_path()
+{
+	if (_apps_path == NULL)
+		return _DEFAULT_OPT_USR_APPS;
+
+	return _apps_path;
+}
+
+API int pkgmgrinfo_pkginfo_set_zone(const char *zone, char *old_zone, int len)
+{
+	retvm_if(vsm_is_virtualized() != 0, PMINFO_R_EINVAL, "Not host side\n");
+	char db_path[PKG_STRING_LEN_MAX] = { '\0', };
+
+	if (old_zone != NULL && _cur_zone != NULL) {
+		old_zone[len - 1] = '\0';
+		strncpy(old_zone, _cur_zone, len - 1);
+	} else if(old_zone != NULL && _cur_zone == NULL)
+		old_zone[0] = '\0';
+
+	if (_cur_zone)
+		free(_cur_zone);
+
+	if (zone == NULL || zone[0] == '\0') {
+		if (_manifest_db != NULL)
+			free(_manifest_db);
+		_manifest_db = NULL;
+
+		if (_cert_db != NULL)
+			free(_cert_db);
+		_cert_db = NULL;
+
+		if (_data_control_db != NULL)
+			free(_data_control_db);
+		_data_control_db = NULL;
+
+		if (_sd_path != NULL)
+			free(_sd_path);
+		_sd_path = NULL;
+
+		if (_apps_path != NULL)
+			free(_apps_path);
+		_apps_path = NULL;
+		_cur_zone = NULL;
+		return PMINFO_R_OK;
 	}
-	sqlite3_free(query);
 
-	query = sqlite3_mprintf("update app_info set x_slp_installedstorage=%Q where x_slp_pkgid=%Q", location?"installed_external":"installed_internal", pkgid);
+	_cur_zone = strdup(zone);
+	snprintf(db_path, PKG_STRING_LEN_MAX, "/var/lib/lxc/%s/rootfs%s",
+			zone, _DEFAULT_MANIFEST_DB);
 
-	ret = sqlite3_exec(ail_db, query, NULL, NULL, NULL);
-	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
+	if (_manifest_db != NULL)
+		free(_manifest_db);
+	_manifest_db = strdup(db_path);
 
-	/*Commit transaction*/
-	ret = sqlite3_exec(ail_db, "COMMIT", NULL, NULL, NULL);
-	if (ret != SQLITE_OK) {
-		_LOGE("Failed to commit transaction. Rollback now\n");
-		ret = sqlite3_exec(ail_db, "ROLLBACK", NULL, NULL, NULL);
-		tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
-	}
-	_LOGD("Transaction Commit and End\n");
+	snprintf(db_path, PKG_STRING_LEN_MAX, "/var/lib/lxc/%s/rootfs%s",
+			zone, _DEFAULT_CERT_DB);
 
-	ret = PMINFO_R_OK;
-catch:
-	sqlite3_close(ail_db);
-	sqlite3_free(query);
-	return ret;
+	if (_cert_db != NULL)
+		free(_cert_db);
+	_cert_db = strdup(db_path);
+
+	snprintf(db_path, PKG_STRING_LEN_MAX, "/var/lib/lxc/%s/rootfs%s",
+			zone, _DEFAULT_DATACONTROL_DB);
+
+	if (_data_control_db != NULL)
+		free(_data_control_db);
+	_data_control_db = strdup(db_path);
+
+	snprintf(db_path, PKG_STRING_LEN_MAX, "/var/lib/lxc/%s/rootfs%s",
+			zone, _DEFAULT_SD_PATH);
+
+	if (_sd_path != NULL)
+		free(_sd_path);
+	_sd_path = strdup(db_path);
+
+	snprintf(db_path, PKG_STRING_LEN_MAX, "/var/lib/lxc/%s/rootfs%s",
+			zone, _DEFAULT_OPT_USR_APPS);
+
+	if (_apps_path != NULL)
+		free(_apps_path);
+	_apps_path = strdup(db_path);
+
+	return PMINFO_R_OK;
 }
 
 API int pkgmgrinfo_pkginfo_set_state_enabled(const char *pkgid, bool enabled)
@@ -101,7 +190,7 @@ API int pkgmgrinfo_pkginfo_set_preload(const char *pkgid, int preload)
 	sqlite3 *pkginfo_db = NULL;
 	char *query = NULL;
 
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
+	ret = _pminfo_db_open_with_options(MANIFEST_DB, &pkginfo_db, SQLITE_OPEN_READWRITE);
 	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
 
 	/*Begin transaction*/
@@ -150,7 +239,7 @@ API int pkgmgrinfo_pkginfo_set_installed_storage(const char *pkgid, INSTALL_LOCA
 	sqlite3 *pkginfo_db = NULL;
 	char *query = NULL;
 
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
+	ret = _pminfo_db_open_with_options(MANIFEST_DB, &pkginfo_db, SQLITE_OPEN_READWRITE);
 	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
 
 	/*Begin transaction*/
@@ -193,10 +282,6 @@ API int pkgmgrinfo_pkginfo_set_installed_storage(const char *pkgid, INSTALL_LOCA
 	ret = sqlite3_exec(pkginfo_db, query, NULL, NULL, NULL);
 	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "Don't execute query = %s\n", query);
 
-	// Setting AIL DB
-	ret = __ail_set_installed_storage(pkgid, location);
-	tryvm_if(ret != PMINFO_R_OK, ret = PMINFO_R_ERROR, "Setting AIL DB failed.");
-
 	/*Commit transaction*/
 	ret = sqlite3_exec(pkginfo_db, "COMMIT", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
@@ -221,7 +306,7 @@ API int pkgmgrinfo_appinfo_set_state_enabled(const char *appid, bool enabled)
 	sqlite3 *pkginfo_db = NULL;
 	char *query = NULL;
 
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
+	ret = _pminfo_db_open_with_options(MANIFEST_DB, &pkginfo_db, SQLITE_OPEN_READWRITE);
 	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
 
 	/*Begin transaction*/
@@ -270,7 +355,7 @@ API int pkgmgrinfo_appinfo_set_default_label(const char *appid, const char *labe
 	char *query = NULL;
 
 	/*open db*/
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
+	ret = _pminfo_db_open_with_options(MANIFEST_DB, &pkginfo_db, SQLITE_OPEN_READWRITE);
 	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
 
 	/*Begin transaction*/

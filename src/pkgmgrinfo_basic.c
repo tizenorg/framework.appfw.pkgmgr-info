@@ -26,7 +26,6 @@
 #include "pkgmgrinfo_private.h"
 #include <openssl/md5.h>
 
-#define HASH_LEN  MD5_DIGEST_LENGTH * 2
 
 
 static void __ps_free_category(category_x *category)
@@ -37,30 +36,6 @@ static void __ps_free_category(category_x *category)
 	FREE_AND_NULL(category);
 }
 
-static void __ps_free_privilege(privilege_x *privilege)
-{
-	if (privilege == NULL)
-		return;
-	FREE_AND_NULL(privilege->text);
-	FREE_AND_NULL(privilege);
-}
-
-static void __ps_free_privileges(privileges_x *privileges)
-{
-	if (privileges == NULL)
-		return;
-	/*Free Privilege*/
-	if (privileges->privilege) {
-		privilege_x *privilege = privileges->privilege;
-		privilege_x *tmp = NULL;
-		while(privilege != NULL) {
-			tmp = privilege->next;
-			__ps_free_privilege(privilege);
-			privilege = tmp;
-		}
-	}
-	FREE_AND_NULL(privileges);
-}
 
 static void __ps_free_metadata(metadata_x *metadata)
 {
@@ -109,6 +84,7 @@ static void __ps_free_operation(operation_x *operation)
 	if (operation == NULL)
 		return;
 	FREE_AND_NULL(operation->text);
+	FREE_AND_NULL(operation->name);
 	FREE_AND_NULL(operation);
 }
 
@@ -117,6 +93,7 @@ static void __ps_free_uri(uri_x *uri)
 	if (uri == NULL)
 		return;
 	FREE_AND_NULL(uri->text);
+	FREE_AND_NULL(uri->name);
 	FREE_AND_NULL(uri);
 }
 
@@ -125,6 +102,7 @@ static void __ps_free_mime(mime_x *mime)
 	if (mime == NULL)
 		return;
 	FREE_AND_NULL(mime->text);
+	FREE_AND_NULL(mime->name);
 	FREE_AND_NULL(mime);
 }
 
@@ -133,6 +111,7 @@ static void __ps_free_subapp(subapp_x *subapp)
 	if (subapp == NULL)
 		return;
 	FREE_AND_NULL(subapp->text);
+	FREE_AND_NULL(subapp->name);
 	FREE_AND_NULL(subapp);
 }
 
@@ -190,20 +169,32 @@ static void __ps_free_datacontrol(datacontrol_x *datacontrol)
 	FREE_AND_NULL(datacontrol);
 }
 
+static void __ps_free_appcontrol(appcontrol_x *appcontrol)
+{
+	if (appcontrol == NULL)
+		return;
+	FREE_AND_NULL(appcontrol->operation);
+	FREE_AND_NULL(appcontrol->uri);
+	FREE_AND_NULL(appcontrol->mime);
+	FREE_AND_NULL(appcontrol);
+}
+
 static void __ps_free_launchconditions(launchconditions_x *launchconditions)
 {
 	if (launchconditions == NULL)
 		return;
 	FREE_AND_NULL(launchconditions->text);
+	GList *cond_list = NULL;
 	/*Free Condition*/
 	if (launchconditions->condition) {
-		condition_x *condition = launchconditions->condition;
-		condition_x *tmp = NULL;
-		while(condition != NULL) {
-			tmp = condition->next;
+		cond_list = launchconditions->condition;
+		condition_x *condition = NULL;
+		while(cond_list != NULL) {
+			condition = (condition_x*)cond_list->data;
 			__ps_free_condition(condition);
-			condition = tmp;
+			cond_list = cond_list->next;
 		}
+		g_list_free(launchconditions->condition);
 	}
 	FREE_AND_NULL(launchconditions);
 }
@@ -213,46 +204,64 @@ static void __ps_free_appsvc(appsvc_x *appsvc)
 	if (appsvc == NULL)
 		return;
 	FREE_AND_NULL(appsvc->text);
+
 	/*Free Operation*/
 	if (appsvc->operation) {
-		operation_x *operation = appsvc->operation;
-		operation_x *tmp = NULL;
-		while(operation != NULL) {
-			tmp = operation->next;
+		GList *list_op = appsvc->operation;
+		operation_x *operation = NULL;
+
+		while(list_op!= NULL) {
+			operation = (operation_x *)list_op->data;
 			__ps_free_operation(operation);
-			operation = tmp;
+			list_op = list_op->next;
 		}
+		g_list_free(appsvc->operation);
+		list_op = NULL;
+		operation = NULL;
 	}
+
 	/*Free Uri*/
 	if (appsvc->uri) {
-		uri_x *uri = appsvc->uri;
-		uri_x *tmp = NULL;
-		while(uri != NULL) {
-			tmp = uri->next;
+		GList *list_uri = appsvc->uri;
+		uri_x *uri = NULL;
+		while(list_uri != NULL) {
+			uri = (uri_x *)list_uri->data;
 			__ps_free_uri(uri);
-			uri = tmp;
+			list_uri = list_uri->next;
 		}
+		g_list_free(appsvc->uri);
+		list_uri = NULL;
+		uri = NULL;
 	}
+
 	/*Free Mime*/
 	if (appsvc->mime) {
-		mime_x *mime = appsvc->mime;
-		mime_x *tmp = NULL;
-		while(mime != NULL) {
-			tmp = mime->next;
+		GList *list_mime = appsvc->mime;
+		mime_x *mime = NULL;
+		while(list_mime != NULL) {
+			mime = (mime_x *)list_mime->data;
 			__ps_free_mime(mime);
-			mime = tmp;
+			list_mime = list_mime->next;
 		}
+		g_list_free(appsvc->mime);
+		list_mime = NULL;
+		mime = NULL;
 	}
+
 	/*Free subapp*/
 	if (appsvc->subapp) {
-		subapp_x *subapp = appsvc->subapp;
-		subapp_x *tmp = NULL;
-		while(subapp != NULL) {
-			tmp = subapp->next;
+		GList *list_subapp = appsvc->subapp;
+		subapp_x *subapp = NULL;
+		while(list_subapp != NULL) {
+			subapp = (subapp_x *)list_subapp->data;
 			__ps_free_subapp(subapp);
-			subapp = tmp;
+			list_subapp = list_subapp->next;
 		}
+		g_list_free(appsvc->subapp);
+		list_subapp = NULL;
+		subapp = NULL;
 	}
+
 	FREE_AND_NULL(appsvc);
 }
 
@@ -266,25 +275,28 @@ static void __ps_free_define(define_x *define)
 	if (define == NULL)
 		return;
 	FREE_AND_NULL(define->path);
+	GList *tmp = NULL;
 	/*Free Request*/
 	if (define->request) {
-		request_x *request = define->request;
-		request_x *tmp = NULL;
-		while(request != NULL) {
-			tmp = request->next;
+		tmp = define->request;
+		request_x *request = NULL;
+		while(tmp != NULL) {
+			request = (request_x*)tmp->data;
 			__ps_free_request(request);
-			request = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(define->request);
 	}
 	/*Free Allowed*/
 	if (define->allowed) {
-		allowed_x *allowed = define->allowed;
-		allowed_x *tmp = NULL;
-		while(allowed != NULL) {
-			tmp = allowed->next;
+		tmp = define->allowed;
+		allowed_x *allowed = NULL;
+		while(tmp != NULL) {
+			allowed = (allowed_x*)tmp->data;
 			__ps_free_allowed(allowed);
-			allowed = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(define->allowed);
 	}
 	FREE_AND_NULL(define);
 }
@@ -294,24 +306,27 @@ static void __ps_free_datashare(datashare_x *datashare)
 	if (datashare == NULL)
 		return;
 	/*Free Define*/
+	GList *tmp = NULL;
 	if (datashare->define) {
-		define_x *define =  datashare->define;
-		define_x *tmp = NULL;
-		while(define != NULL) {
-			tmp = define->next;
+		tmp = datashare->define;
+		define_x *define =  NULL;
+		while(tmp != NULL) {
+			define = (define_x*)tmp->data;
 			__ps_free_define(define);
-			define = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(datashare->define);
 	}
 	/*Free Request*/
 	if (datashare->request) {
-		request_x *request = datashare->request;
-		request_x *tmp = NULL;
-		while(request != NULL) {
-			tmp = request->next;
+		tmp = datashare->request;
+		request_x *request = NULL;
+		while(tmp != NULL) {
+			request = (request_x*)tmp->data;
 			__ps_free_request(request);
-			request = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(datashare->request);
 	}
 	FREE_AND_NULL(datashare);
 }
@@ -356,12 +371,12 @@ static void __ps_free_license(license_x *license)
 	FREE_AND_NULL(license);
 }
 
-static void __ps_free_uiapplication(uiapplication_x *uiapplication)
+void _pkgmgrinfo_basic_free_uiapplication_x(uiapplication_x *uiapplication)
 {
 	if (uiapplication == NULL)
 		return;
+	GList *tmp = NULL;
 	FREE_AND_NULL(uiapplication->exec);
-	FREE_AND_NULL(uiapplication->ambient_support);
 	FREE_AND_NULL(uiapplication->appid);
 	FREE_AND_NULL(uiapplication->nodisplay);
 	FREE_AND_NULL(uiapplication->multiple);
@@ -382,123 +397,174 @@ static void __ps_free_uiapplication(uiapplication_x *uiapplication)
 	FREE_AND_NULL(uiapplication->support_disable);
 	FREE_AND_NULL(uiapplication->ui_gadget);
 	FREE_AND_NULL(uiapplication->removable);
+	FREE_AND_NULL(uiapplication->companion_type);
 	FREE_AND_NULL(uiapplication->support_mode);
 	FREE_AND_NULL(uiapplication->support_feature);
+	FREE_AND_NULL(uiapplication->support_category);
 	FREE_AND_NULL(uiapplication->satui_label);
 	FREE_AND_NULL(uiapplication->package_type);
 	FREE_AND_NULL(uiapplication->package_system);
 	FREE_AND_NULL(uiapplication->package_installed_time);
+	FREE_AND_NULL(uiapplication->launch_mode);
+	FREE_AND_NULL(uiapplication->alias_appid);
+	FREE_AND_NULL(uiapplication->effective_appid);
+	FREE_AND_NULL(uiapplication->api_version);
+#ifdef _APPFW_FEATURE_EXPANSION_PKG_INSTALL
+	FREE_AND_NULL(uiapplication->tep_name);
+#endif
+#ifdef _APPFW_FEATURE_MOUNT_INSTALL
+	FREE_AND_NULL(uiapplication->tpk_name);
+#endif
 
 	/*Free Label*/
 	if (uiapplication->label) {
-		label_x *label = uiapplication->label;
-		label_x *tmp = NULL;
-		while(label != NULL) {
-			tmp = label->next;
+		tmp = uiapplication->label;
+		while(tmp != NULL){
+			label_x *label = (label_x*)tmp->data;
 			__ps_free_label(label);
-			label = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(uiapplication->label);
 	}
 	/*Free Icon*/
 	if (uiapplication->icon) {
-		icon_x *icon = uiapplication->icon;
-		icon_x *tmp = NULL;
-		while(icon != NULL) {
-			tmp = icon->next;
+		tmp = uiapplication->icon;
+		while(tmp != NULL){
+			icon_x* icon = (icon_x*)tmp->data;
 			__ps_free_icon(icon);
-			icon = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(uiapplication->icon);
 	}
 	/*Free image*/
 	if (uiapplication->image) {
-		image_x *image = uiapplication->image;
-		image_x *tmp = NULL;
-		while(image != NULL) {
-			tmp = image->next;
+		tmp = uiapplication->image;
+		while(tmp != NULL){
+			image_x *image = (image_x*)tmp->data;
 			__ps_free_image(image);
-			image = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(uiapplication->image);
 	}
 	/*Free LaunchConditions*/
 	if (uiapplication->launchconditions) {
-		launchconditions_x *launchconditions = uiapplication->launchconditions;
-		launchconditions_x *tmp = NULL;
-		while(launchconditions != NULL) {
-			tmp = launchconditions->next;
+		tmp = uiapplication->launchconditions;
+		while(tmp != NULL) {
+			launchconditions_x *launchconditions = (launchconditions_x*)tmp->data;
 			__ps_free_launchconditions(launchconditions);
-			launchconditions = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(uiapplication->launchconditions);
 	}
 	/*Free Notification*/
 	if (uiapplication->notification) {
-		notification_x *notification = uiapplication->notification;
-		notification_x *tmp = NULL;
-		while(notification != NULL) {
-			tmp = notification->next;
+		tmp = uiapplication->notification;
+		notification_x *notification = NULL;
+		while(tmp != NULL) {
+			notification = (notification_x*)tmp->data;
 			__ps_free_notification(notification);
-			notification = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(uiapplication->notification);
 	}
 	/*Free DataShare*/
 	if (uiapplication->datashare) {
-		datashare_x *datashare = uiapplication->datashare;
-		datashare_x *tmp = NULL;
-		while(datashare != NULL) {
-			tmp = datashare->next;
+		tmp = uiapplication->datashare;
+		datashare_x *datashare = NULL;
+		while(tmp != NULL) {
+			datashare = (datashare_x*)tmp->data;
 			__ps_free_datashare(datashare);
-			datashare = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(uiapplication->datashare);
 	}
+
 	/*Free AppSvc*/
 	if (uiapplication->appsvc) {
-		appsvc_x *appsvc = uiapplication->appsvc;
-		appsvc_x *tmp = NULL;
-		while(appsvc != NULL) {
-			tmp = appsvc->next;
+		GList *list_asvc = uiapplication->appsvc;
+		appsvc_x *appsvc = NULL;
+		while(list_asvc != NULL) {
+			appsvc = (appsvc_x *)list_asvc->data;
 			__ps_free_appsvc(appsvc);
-			appsvc = tmp;
+			list_asvc = list_asvc->next;
 		}
+		g_list_free(uiapplication->appsvc);
+		list_asvc = NULL;
+		appsvc = NULL;
 	}
+
 	/*Free Category*/
 	if (uiapplication->category) {
-		category_x *category = uiapplication->category;
-		category_x *tmp = NULL;
-		while(category != NULL) {
-			tmp = category->next;
+		tmp  = uiapplication->category;
+		category_x *category = NULL;
+		while(tmp != NULL) {
+			category = (category_x*)tmp->data;
 			__ps_free_category(category);
-			category = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(uiapplication->category);
 	}
 	/*Free Metadata*/
 	if (uiapplication->metadata) {
-		metadata_x *metadata = uiapplication->metadata;
-		metadata_x *tmp = NULL;
-		while(metadata != NULL) {
-			tmp = metadata->next;
+		GList *list_md = uiapplication->metadata;
+		metadata_x *metadata = NULL;
+		while(list_md != NULL) {
+			metadata = (metadata_x *)list_md->data;
 			__ps_free_metadata(metadata);
-			metadata = tmp;
+			list_md = list_md->next;
 		}
+		g_list_free(uiapplication->metadata);
+		list_md = NULL;
+		metadata = NULL;
 	}
+
 	/*Free permission*/
 	if (uiapplication->permission) {
-		permission_x *permission = uiapplication->permission;
-		permission_x *tmp = NULL;
-		while(permission != NULL) {
-			tmp = permission->next;
+		tmp = uiapplication->permission;
+		permission_x *permission = NULL;
+		while(tmp != NULL) {
+			permission = (permission_x*)tmp->data;
 			__ps_free_permission(permission);
-			permission = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(uiapplication->permission);
 	}
 
 	/*Free datacontrol*/
 	if (uiapplication->datacontrol) {
-		datacontrol_x *datacontrol = uiapplication->datacontrol;
-		datacontrol_x *tmp = NULL;
-		while(datacontrol != NULL) {
-			tmp = datacontrol->next;
+		tmp = uiapplication->datacontrol;
+		while(tmp != NULL) {
+			datacontrol_x *datacontrol = (datacontrol_x*)tmp->data;
 			__ps_free_datacontrol(datacontrol);
-			datacontrol = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(uiapplication->datacontrol);
+	}
+
+	/*Free app background category*/
+	if (uiapplication->background_category) {
+		tmp = uiapplication->background_category;
+		char *category_tmp = NULL;
+		while (tmp != NULL) {
+			category_tmp = (char *)tmp->data;
+			if (category_tmp != NULL) {
+				free(category_tmp);
+				category_tmp = NULL;
+			}
+			tmp = g_list_next(tmp);
+		}
+		g_list_free(uiapplication->background_category);
+	}
+
+	/*Free app control*/
+	if (uiapplication->appcontrol) {
+		tmp = uiapplication->appcontrol;
+		while (tmp != NULL) {
+			appcontrol_x *appcontrol = (appcontrol_x *)tmp->data;
+			__ps_free_appcontrol(appcontrol);
+			tmp = tmp->next;
+		}
+		g_list_free(uiapplication->appcontrol);
 	}
 
 	/* _PRODUCT_LAUNCHING_ENHANCED_ START */
@@ -562,16 +628,19 @@ API void _pkgmgrinfo_basic_free_manifest_x(manifest_x *mfx)
 {
 	if (mfx == NULL)
 		return;
+	GList *tmp = NULL;
 	FREE_AND_NULL(mfx->ns);
 	FREE_AND_NULL(mfx->package);
 	FREE_AND_NULL(mfx->version);
+	FREE_AND_NULL(mfx->api_version);
 	FREE_AND_NULL(mfx->installlocation);
 	FREE_AND_NULL(mfx->preload);
 	FREE_AND_NULL(mfx->readonly);
 	FREE_AND_NULL(mfx->removable);
 	FREE_AND_NULL(mfx->update);
 	FREE_AND_NULL(mfx->system);
-	FREE_AND_NULL(mfx->hash);
+	FREE_AND_NULL(mfx->backend_installer);
+	FREE_AND_NULL(mfx->custom_smack_label);
 	FREE_AND_NULL(mfx->type);
 	FREE_AND_NULL(mfx->package_size);
 	FREE_AND_NULL(mfx->package_total_size);
@@ -589,184 +658,149 @@ API void _pkgmgrinfo_basic_free_manifest_x(manifest_x *mfx)
 	FREE_AND_NULL(mfx->mother_package);
 	FREE_AND_NULL(mfx->support_mode);
 	FREE_AND_NULL(mfx->groupid);
-	FREE_AND_NULL(mfx->support_reset);
-	FREE_AND_NULL(mfx->use_reset);
+#ifdef _APPFW_FEATURE_EXPANSION_PKG_INSTALL
+	FREE_AND_NULL(mfx->tep_name);
+#endif
 
 	/*Free Icon*/
 	if (mfx->icon) {
-		icon_x *icon = mfx->icon;
-		icon_x *tmp = NULL;
-		while(icon != NULL) {
-			tmp = icon->next;
+		tmp = mfx->icon;
+		while(tmp != NULL){
+			icon_x *icon = (icon_x*)tmp->data;
 			__ps_free_icon(icon);
-			icon = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->icon);
 	}
 	/*Free Label*/
 	if (mfx->label) {
-		label_x *label = mfx->label;
-		label_x *tmp = NULL;
-		while(label != NULL) {
-			tmp = label->next;
+		tmp = mfx->label;
+		while(tmp != NULL){
+			label_x *label = (label_x*)tmp->data;
 			__ps_free_label(label);
-			label = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->label);
 	}
 	/*Free Author*/
 	if (mfx->author) {
-		author_x *author = mfx->author;
-		author_x *tmp = NULL;
-		while(author != NULL) {
-			tmp = author->next;
+		tmp = mfx->author;
+		while(tmp != NULL){
+			author_x *author = (author_x*)tmp->data;
 			__ps_free_author(author);
-			author = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->author);
 	}
 	/*Free Description*/
 	if (mfx->description) {
-		description_x *description = mfx->description;
-		description_x *tmp = NULL;
-		while(description != NULL) {
-			tmp = description->next;
+		tmp = mfx->description;
+		while(tmp != NULL){
+			description_x *description = (description_x*)tmp->data;
 			__ps_free_description(description);
-			description = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->description);
 	}
 	/*Free License*/
 	if (mfx->license) {
-		license_x *license = mfx->license;
-		license_x *tmp = NULL;
-		while(license != NULL) {
-			tmp = license->next;
+		tmp = mfx->license;
+		while(tmp != NULL){
+			license_x *license = (license_x*)tmp->data;
 			__ps_free_license(license);
-			license = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->license);
 	}
 	/*Free Privileges*/
 	if (mfx->privileges) {
-		privileges_x *privileges = mfx->privileges;
-		privileges_x *tmp = NULL;
-		while(privileges != NULL) {
-			tmp = privileges->next;
-			__ps_free_privileges(privileges);
-			privileges = tmp;
+		tmp = mfx->privileges;
+		while(tmp != NULL){
+			char* priv  = (char*) tmp->data;
+			if(priv){
+				FREE_AND_NULL(priv);
+			}
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->privileges);
 	}
+
 	/*Free UiApplication*/
 	if (mfx->uiapplication) {
-		uiapplication_x *uiapplication = mfx->uiapplication;
-		uiapplication_x *tmp = NULL;
-		while(uiapplication != NULL) {
-			tmp = uiapplication->next;
-			__ps_free_uiapplication(uiapplication);
-			uiapplication = tmp;
+		uiapplication_x *uiapplication = NULL;
+		GList *list_up = mfx->uiapplication;
+
+		while(list_up != NULL) {
+			uiapplication = (uiapplication_x *)list_up->data;
+			_pkgmgrinfo_basic_free_uiapplication_x(uiapplication);
+			list_up = list_up->next;
 		}
+		g_list_free(mfx->uiapplication);
+		list_up = NULL;
+		uiapplication = NULL;
 	}
+
 	/*Free Daemon*/
 	if (mfx->daemon) {
-		daemon_x *daemon = mfx->daemon;
-		daemon_x *tmp = NULL;
-		while(daemon != NULL) {
-			tmp = daemon->next;
+		tmp = mfx->daemon;
+		while(tmp != NULL){
+			daemon_x *daemon = (daemon_x*)tmp->data;
 			__ps_free_daemon(daemon);
-			daemon = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->daemon);
 	}
 	/*Free Theme*/
 	if (mfx->theme) {
-		theme_x *theme = mfx->theme;
-		theme_x *tmp = NULL;
-		while(theme != NULL) {
-			tmp = theme->next;
+		tmp = mfx->theme;
+		while(tmp != NULL){
+			theme_x* theme = (theme_x*)tmp->data;
 			__ps_free_theme(theme);
-			theme = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->theme);
 	}
 	/*Free Font*/
 	if (mfx->font) {
-		font_x *font = mfx->font;
-		font_x *tmp = NULL;
-		while(font != NULL) {
-			tmp = font->next;
+		tmp = mfx->font;
+		while(tmp != NULL){
+			font_x *font = (font_x*)tmp->data;
 			__ps_free_font(font);
-			font = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->font);
 	}
 	/*Free Ime*/
 	if (mfx->ime) {
-		ime_x *ime = mfx->ime;
-		ime_x *tmp = NULL;
-		while(ime != NULL) {
-			tmp = ime->next;
+		tmp = mfx->ime;
+		while(tmp != NULL){
+			ime_x *ime = (ime_x*)tmp->data;
 			__ps_free_ime(ime);
-			ime = tmp;
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->ime);
 	}
 	/*Free Compatibility*/
 	if (mfx->compatibility) {
-		compatibility_x *compatibility = mfx->compatibility;
-		compatibility_x *tmp = NULL;
-		while(compatibility != NULL) {
-			tmp = compatibility->next;
-			__ps_free_compatibility(compatibility);
-			compatibility = tmp;
+		tmp = mfx->compatibility;
+		while(tmp != NULL){
+			compatibility_x *comp = (compatibility_x*)tmp->data;
+			__ps_free_compatibility(comp);
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->compatibility);
 	}
 	/*Free DeviceProfile*/
 	if (mfx->deviceprofile) {
-		deviceprofile_x *deviceprofile = mfx->deviceprofile;
-		deviceprofile_x *tmp = NULL;
-		while(deviceprofile != NULL) {
-			tmp = deviceprofile->next;
-			__ps_free_deviceprofile(deviceprofile);
-			deviceprofile = tmp;
+		tmp = mfx->deviceprofile;
+		while(tmp != NULL){
+			deviceprofile_x* profile = (deviceprofile_x*)tmp->data;
+			__ps_free_deviceprofile(profile);
+			tmp = tmp->next;
 		}
+		g_list_free(mfx->deviceprofile);
 	}
 	FREE_AND_NULL(mfx);
 	return;
 }
 
-API char*  pkgmgrinfo_basic_generate_hash_for_file( const char *file)
-{
-
-	unsigned char c[MD5_DIGEST_LENGTH] = {0};
-	char *hash = NULL;
-	char temp[3]={0};
-	int index = 0;
-	MD5_CTX mdContext;
-	int bytes;
-	unsigned char data[1024];
-
-	FILE *inFile = fopen (file, "rb");
-
-	if (inFile == NULL) {
-		_LOGD("@Error while opening the file: %s",strerror(errno));
-		return NULL;
-	}
-
-	MD5_Init (&mdContext);
-
-	while ((bytes = fread (data, 1, 1024, inFile)) != 0)
-		MD5_Update (&mdContext, data, bytes);
-
-	MD5_Final (c,&mdContext);
-
-	hash = (char*)malloc(HASH_LEN + 1);
-	if(hash == NULL){
-		_LOGE("Malloc failed!!");
-		goto catch;
-	}
-	memset(hash,'\0',HASH_LEN + 1);
-
-	for(index = 0; index < MD5_DIGEST_LENGTH; index++) {
-		sprintf(temp,"%02x",c[index]);
-		strncat(hash,temp,strlen(temp));
-
-	}
-
-catch:
-	if(inFile)
-		fclose (inFile);
-
-	return hash;
-}

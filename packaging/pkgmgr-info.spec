@@ -1,6 +1,6 @@
 Name:       pkgmgr-info
 Summary:    Packager Manager infomation api for package
-Version:    0.0.231
+Version:    0.0.230
 Release:    1
 Group:      Application Framework/Package Management
 License:    Apache-2.0
@@ -13,8 +13,13 @@ BuildRequires:	pkgconfig(db-util)
 BuildRequires:	pkgconfig(libxml-2.0)
 BuildRequires:	pkgconfig(dbus-1)
 BuildRequires:	pkgconfig(dbus-glib-1)
-BuildRequires:	pkgconfig(journal)
 BuildRequires:	pkgconfig(openssl)
+BuildRequires:	pkgconfig(bundle)
+BuildRequires:	pkgconfig(vasum)
+
+%define appfw_feature_expansion_pkg_install 1
+%define appfw_feature_delta_update 1
+%define appfw_feature_mount_install 0
 
 %description
 Packager Manager infomation api for packaging
@@ -58,7 +63,30 @@ export FFLAGS="$FFLAGS -DTIZEN_ENGINEER_MODE"
 export CFLAGS="$CFLAGS -D_APPFW_FEATURE_PROFILE_WEARABLE"
 %endif
 
-%cmake .
+%if 0%{?appfw_feature_expansion_pkg_install}
+_EXPANSION_PKG_INSTALL=ON
+%else
+_EXPANSION_PKG_INSTALL=OFF
+%endif
+
+%if 0%{?appfw_feature_delta_update}
+_DELTA_UPDATE=ON
+%else
+_DELTA_UPDATE=OFF
+%endif
+
+%if 0%{?appfw_feature_mount_install}
+_MOUNT_INSTALL=ON
+%else
+_MOUNT_INSTALL=OFF
+%endif
+
+
+%cmake . -D_APPFW_FEATURE_EXPANSION_PKG_INSTALL:BOOL=${_EXPANSION_PKG_INSTALL} \
+		-D_APPFW_FEATURE_DELTA_UPDATE:BOOL=${_DELTA_UPDATE} \
+		-DTIZEN_FULL_VERSION=%{tizen_full_version} \
+		-D_APPFW_FEATURE_MOUNT_INSTALL:BOOL=${_MOUNT_INSTALL}
+
 make %{?jobs:-j%jobs}
 
 %install
@@ -69,7 +97,6 @@ cp LICENSE %{buildroot}/usr/share/license/%{name}
 cp LICENSE %{buildroot}/usr/share/license/%{name}-parser
 
 %post
-
 mkdir -p /opt/usr/apps/tmp
 chown 5100:5100 /opt/usr/apps/tmp
 chmod 771 /opt/usr/apps/tmp
@@ -96,9 +123,10 @@ chsmack -a '_' /usr/etc/package-manager
 %files devel
 %defattr(-,root,root,-)
 %{_includedir}/pkgmgr-info.h
+%{_includedir}/pkgmgrinfo_resource.h
 %{_includedir}/pkgmgrinfo_basic.h
-%{_includedir}/pkgmgrinfo_feature.h
 %{_includedir}/pkgmgrinfo_type.h
+%{_includedir}/pkgmgrinfo_zone.h
 %{_libdir}/pkgconfig/pkgmgr-info.pc
 %{_libdir}/libpkgmgr-info.so
 
@@ -108,14 +136,18 @@ chsmack -a '_' /usr/etc/package-manager
 %{_libdir}/libpkgmgr_parser.so.*
 %{_prefix}/etc/package-manager/preload/manifest.xsd
 %{_prefix}/etc/package-manager/preload/xml.xsd
+%{_prefix}/etc/package-manager/preload/res.xsd
 %{_prefix}/etc/package-manager/parser_path.conf
 %{_prefix}/etc/package-manager/parserlib/pkgmgr_parser_plugin_list.txt
 /usr/share/license/%{name}-parser
+%if 0%{?appfw_feature_delta_update}
+%{_prefix}/etc/package-manager/preload/delta_info.xsd
+%endif
 
 %files parser-devel
 %defattr(-,root,root,-)
 %{_includedir}/pkgmgr/pkgmgr_parser.h
-%{_includedir}/pkgmgr/pkgmgr_parser_feature.h
 %{_includedir}/pkgmgr/pkgmgr_parser_db.h
+%{_includedir}/pkgmgr/pkgmgr_parser_resource.h
 %{_libdir}/pkgconfig/pkgmgr-parser.pc
 %{_libdir}/libpkgmgr_parser.so

@@ -35,14 +35,15 @@
 
 void pkgmgr_parser_close_db();
 void __add_preload_info(manifest_x * mfx, const char *manifest);
-void __extract_data(gpointer data, label_x *lbl, license_x *lcn, icon_x *icn, description_x *dcn, author_x *ath,
+void __extract_data(gpointer data, GList *lbl, GList *lcn, GList *icn, GList *dcn, GList *ath,
 		char **label, char **license, char **icon, char **description, char **author);
-GList *__create_locale_list(GList *locale, label_x *lbl, license_x *lcn, icon_x *icn, description_x *dcn, author_x *ath);
+GList *__create_locale_list(GList *locale, GList *lbl, GList *lcn, GList *icn, GList *dcn, GList *ath);
 int __exec_query_no_msg(char *query);
 void __trimfunc(GList* trim_list);
 const char *__get_str(const char *str);
 int __initialize_db(sqlite3 *db_handle, char *db_query);
 int __exec_query(char *query);
 int __evaluate_query(sqlite3 *db_handle, char *query);
+char *__zone_get_root_path(const char *zone);
 
 #endif				/* __PKGMGR_PARSER_INTERNAL_H__ */

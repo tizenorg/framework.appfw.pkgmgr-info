@@ -39,6 +39,7 @@
 #include "pkgmgr_parser_plugin.h"
 #include "pkgmgr-info.h"
 #include "pkgmgrinfo_debug.h"
+#include "pkgmgr_parser_internal.h"
 
 #ifdef LOG_TAG
 #undef LOG_TAG
@@ -534,8 +535,7 @@ static int __run_tag_parser_prestep(pkgmgr_parser_plugin_info_x *plugin_info, xm
 	const xmlChar *value;
 	name = xmlTextReaderConstName(reader);
 	if (name == NULL) {
-		_LOGE("TEST TEST TES\n");
-		name = BAD_CAST "--";
+		_LOGE("name is NULL.");
 	}
 
 	value = xmlTextReaderConstValue(reader);
@@ -549,8 +549,7 @@ static int __run_tag_parser_prestep(pkgmgr_parser_plugin_info_x *plugin_info, xm
 
 	name = xmlTextReaderConstName(reader);
 	if (name == NULL) {
-		_LOGE("TEST TEST TES\n");
-		name = BAD_CAST "--";
+		_LOGE("name is NULL.");
 	}
 
 	xmlDocPtr docPtr = xmlTextReaderCurrentDoc(reader);
@@ -667,6 +666,7 @@ static void __process_category_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 	int tag_exist = 0;
 	char buffer[1024] = { 0, };
 	category_x *category = NULL;
+	GList *ct = NULL;
 	GList *category_list = NULL;
 	__category_t *category_detail = NULL;
 
@@ -675,16 +675,19 @@ static void __process_category_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 		return;
 	}
 
-	uiapplication_x *up = plugin_info->mfx->uiapplication;
-	while(up != NULL)
+	uiapplication_x *up = NULL;
+	GList *list_up = plugin_info->mfx->uiapplication;
+	while(list_up != NULL)
 	{
-		category = up->category;
-		while (category != NULL)
+		up = (uiapplication_x *)list_up->data;
+		ct = up->category;
+		while (ct != NULL)
 		{
+			category = (category_x*)ct->data;
 			//get glist of category key and value combination
 			memset(buffer, 0x00, 1024);
 			snprintf(buffer, 1024, "%s/", plugin_info->name);
-			if ((category->name) && (strncmp(category->name, plugin_info->name, strlen(plugin_info->name)) == 0)) {
+			if ((category) && (category->name) && (strncmp(category->name, plugin_info->name, strlen(plugin_info->name)) == 0)) {
 				category_detail = (__category_t*) calloc(1, sizeof(__category_t));
 				if (category_detail == NULL) {
 					_LOGD("Memory allocation failed\n");
@@ -702,7 +705,7 @@ static void __process_category_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 				category_list = g_list_append(category_list, (gpointer)category_detail);
 				tag_exist = 1;
 			}
-			category = category->next;
+			ct = ct->next;
 		}
 
 		//send glist to parser when tags for metadata plugin parser exist.
@@ -713,7 +716,7 @@ static void __process_category_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 		__category_parser_clear_dir_list(category_list);
 		category_list = NULL;
 		tag_exist = 0;
-		up = up->next;
+		list_up = list_up->next;
 	}
 END:
 	if (category_list)
@@ -725,8 +728,9 @@ END:
 static void __process_metadata_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 {
 	int tag_exist = 0;
-	char buffer[1024] = { 0, };
-	metadata_x *md = NULL;
+//	char buffer[1024] = { 0, }; Not in use anywhere
+	metadata_x *metadata = NULL;
+	GList *md = NULL;
 	GList *md_list = NULL;
 	__metadata_t *md_detail = NULL;
 
@@ -735,38 +739,42 @@ static void __process_metadata_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 		return;
 	}
 
-	uiapplication_x *up = plugin_info->mfx->uiapplication;
-	while(up != NULL)
+	uiapplication_x *up = NULL;
+	GList *list_up = plugin_info->mfx->uiapplication;
+
+	while(list_up != NULL)
 	{
+		up = (uiapplication_x *)list_up->data;
 		md = up->metadata;
 		while (md != NULL)
 		{
+			metadata = (metadata_x *)md->data;
 			//get glist of metadata key and value combination
-			memset(buffer, 0x00, 1024);
-			snprintf(buffer, 1024, "%s/", plugin_info->name);
-			if ((md->key && md->value) && (strncmp(md->key, plugin_info->name, strlen(plugin_info->name)) == 0)) {
+//			memset(buffer, 0x00, 1024);
+//			snprintf(buffer, 1024, "%s/", plugin_info->name);
+			if ((metadata && metadata->key && metadata->value) && (strncmp(metadata->key, plugin_info->name, strlen(plugin_info->name)) == 0)) {
 				md_detail = (__metadata_t*) calloc(1, sizeof(__metadata_t));
 				if (md_detail == NULL) {
 					_LOGD("Memory allocation failed\n");
 					goto END;
 				}
 
-				md_detail->key = (char*) calloc(1, sizeof(char)*(strlen(md->key)+2));
+				md_detail->key = (char*) calloc(1, sizeof(char)*(strlen(metadata->key)+2));
 				if (md_detail->key == NULL) {
 					_LOGD("Memory allocation failed\n");
 					FREE_AND_NULL(md_detail);
 					goto END;
 				}
-				snprintf(md_detail->key, (strlen(md->key)+1), "%s", md->key);
+				snprintf(md_detail->key, (strlen(metadata->key)+1), "%s", metadata->key);
 
-				md_detail->value = (char*) calloc(1, sizeof(char)*(strlen(md->value)+2));
+				md_detail->value = (char*) calloc(1, sizeof(char)*(strlen(metadata->value)+2));
 				if (md_detail->value == NULL) {
 					_LOGD("Memory allocation failed\n");
 					FREE_AND_NULL(md_detail->key);
 					FREE_AND_NULL(md_detail);
 					goto END;
 				}
-				snprintf(md_detail->value, (strlen(md->value)+1), "%s", md->value);
+				snprintf(md_detail->value, (strlen(metadata->value)+1), "%s", metadata->value);
 
 				md_list = g_list_append(md_list, (gpointer)md_detail);
 				tag_exist = 1;
@@ -782,12 +790,13 @@ static void __process_metadata_parser(pkgmgr_parser_plugin_info_x *plugin_info)
 		__metadata_parser_clear_dir_list(md_list);
 		md_list = NULL;
 		tag_exist = 0;
-		up = up->next;
+		list_up = list_up->next;
 	}
 
 END:
 	if(md_list)
 		__metadata_parser_clear_dir_list(md_list);
+	metadata = NULL;
 	return;
 }
 
@@ -824,7 +833,7 @@ static void __process_each_plugin(pkgmgr_parser_plugin_info_x *plugin_info)
 	int ret = 0;
 
 	plugin_info->lib_handle = dlopen(plugin_info->path, RTLD_LAZY);
-	retm_if(plugin_info->lib_handle == NULL, "dlopen is failed lib_path");
+	if (plugin_info->lib_handle == NULL) return;
 
 	ret = __parser_send_tag(plugin_info->lib_handle, plugin_info->action, PLUGIN_PRE_PROCESS, plugin_info->pkgid);
 	_LOGS("PLUGIN_PRE_PROCESS : [%s] result=[%d]\n", plugin_info->name, ret);
@@ -875,16 +884,31 @@ void __process_all_plugins(pkgmgr_parser_plugin_info_x *plugin_info)
 }
 
 
-int _pkgmgr_parser_plugin_open_db()
+int _zone_pkgmgr_parser_plugin_open_db(const char *zone)
 {
 	char *error_message = NULL;
 	int ret;
 	FILE * fp = NULL;
+	char db_path[PKG_STRING_LEN_MAX] = {'\0',};
 
-	fp = fopen(PKGMGR_PARSER_DB_FILE, "r");
+	if (zone == NULL || strlen(zone) == 0 || strcmp(zone, ZONE_HOST) == 0) {
+		snprintf(db_path, PKG_STRING_LEN_MAX, "%s", PKGMGR_PARSER_DB_FILE);
+	} else {
+		char *rootpath = NULL;
+		rootpath = __zone_get_root_path(zone);
+		if (rootpath == NULL) {
+			_LOGE("Failed to get rootpath");
+			return -1;
+		}
+
+		snprintf(db_path, PKG_STRING_LEN_MAX, "%s%s", rootpath, PKGMGR_PARSER_DB_FILE);
+	}
+	_LOGD("db path(%s)", db_path);
+
+	fp = fopen(db_path, "r");
 	if (fp != NULL) {
 		fclose(fp);
-		ret = db_util_open(PKGMGR_PARSER_DB_FILE, &pkgmgr_parser_db, DB_UTIL_REGISTER_HOOK_METHOD);
+		ret = db_util_open(db_path, &pkgmgr_parser_db, DB_UTIL_REGISTER_HOOK_METHOD);
 		if (ret != SQLITE_OK) {
 			_LOGE("package info DB initialization failed\n");
 			return -1;
@@ -892,7 +916,7 @@ int _pkgmgr_parser_plugin_open_db()
 		return 0;
 	}
 
-	ret = db_util_open(PKGMGR_PARSER_DB_FILE, &pkgmgr_parser_db, DB_UTIL_REGISTER_HOOK_METHOD);
+	ret = db_util_open(db_path, &pkgmgr_parser_db, DB_UTIL_REGISTER_HOOK_METHOD);
 	if (ret != SQLITE_OK) {
 		_LOGE("package info DB initialization failed\n");
 		return -1;
@@ -907,13 +931,17 @@ int _pkgmgr_parser_plugin_open_db()
 	return 0;
 }
 
+int _pkgmgr_parser_plugin_open_db()
+{
+	return _zone_pkgmgr_parser_plugin_open_db(NULL);
+}
 
 void _pkgmgr_parser_plugin_close_db()
 {
 	sqlite3_close(pkgmgr_parser_db);
 }
 
-void _pkgmgr_parser_plugin_process_plugin(manifest_x *mfx, const char *filename, ACTION_TYPE action)
+void _zone_pkgmgr_parser_plugin_process_plugin(manifest_x *mfx, const char *filename, ACTION_TYPE action, const char *zone)
 {
 	int ret = 0;
 
@@ -929,7 +957,7 @@ void _pkgmgr_parser_plugin_process_plugin(manifest_x *mfx, const char *filename,
 	memset(plugin_info, '\0', sizeof(pkgmgr_parser_plugin_info_x));
 
 	/*initialize pkgmgr_paser db*/
-	ret = _pkgmgr_parser_plugin_open_db();
+	ret = _zone_pkgmgr_parser_plugin_open_db(zone);
 	if (ret < 0)
 		_LOGE("_pkgmgr_parser_plugin_open_db failed\n");
 
@@ -950,6 +978,11 @@ void _pkgmgr_parser_plugin_process_plugin(manifest_x *mfx, const char *filename,
 
 	/*clean plugin_info_x*/
 	__clean_plugin_info(plugin_info);
+}
+
+void _pkgmgr_parser_plugin_process_plugin(manifest_x *mfx, const char *filename, ACTION_TYPE action)
+{
+	_zone_pkgmgr_parser_plugin_process_plugin(mfx, filename, action, NULL);
 }
 
 void _pkgmgr_parser_plugin_uninstall_plugin(const char *plugin_type, const char *pkgid, const char *appid)

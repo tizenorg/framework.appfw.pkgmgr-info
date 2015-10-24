@@ -47,6 +47,10 @@ void _pkgmgr_parser_plugin_close_db();
 void _pkgmgr_parser_plugin_process_plugin(manifest_x *mfx, const char *filename, ACTION_TYPE action);
 void _pkgmgr_parser_plugin_uninstall_plugin(const char *plugin_type, const char *pkgid, const char *appid);
 
+int _zone_pkgmgr_parser_plugin_open_db(const char *zone);
+void _zone_pkgmgr_parser_plugin_process_plugin(manifest_x *mfx, const char *filename,
+	ACTION_TYPE action, const char *zone);
+
 #ifdef __cplusplus
 }
 #endif				/* __cplusplus */

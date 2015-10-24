@@ -46,8 +46,8 @@
 extern "C" {
 #endif
 #include "pkgmgr_parser.h"
-#include "pkgmgr_parser_feature.h"
 
+#define PKGMGR_PARSER_DB_VERSION 	1
 #define PKGMGR_PARSER_DB_FILE "/opt/dbspace/.pkgmgr_parser.db"
 #define PKGMGR_CERT_DB_FILE "/opt/dbspace/.pkgmgr_cert.db"
 
@@ -139,7 +139,19 @@ int pkgmgr_parser_update_enabled_pkg_info_in_db(const char *pkgid);
 int pkgmgr_parser_update_disabled_pkg_info_in_db(const char *pkgid);
 int pkgmgr_parser_insert_app_aliasid_info_in_db(void);
 int pkgmgr_parser_update_app_aliasid_info_in_db(void);
+#ifdef _APPFW_FEATURE_EXPANSION_PKG_INSTALL
+int pkgmgr_parser_insert_tep_in_db(const char *pkgid, const char *tep_name);
+int pkgmgr_parser_update_tep_in_db(const char *pkgid, const char *tep_name);
+int pkgmgr_parser_delete_tep_in_db(const char *pkgid);
+#endif
 
+#ifdef _APPFW_FEATURE_MOUNT_INSTALL
+int pkgmgr_parser_insert_mount_install_info_in_db(const char *pkgid, bool ismount, const char *tpk_name);
+#endif
+
+int zone_pkgmgr_parser_update_disabled_pkg_info_in_db(const char *pkgid, const char *zone);
+int zone_pkgmgr_parser_update_enabled_pkg_info_in_db(const char *pkgid, const char *zone);
+int zone_pkgmgr_parser_update_app_disable_bg_operation_info_in_db(const char *appid, const char *zone, bool is_disable);
 /** @} */
 #ifdef __cplusplus
 }

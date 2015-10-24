@@ -24,34 +24,22 @@
 #ifndef __PKGMGRINFO_BASIC_H__
 #define __PKGMGRINFO_BASIC_H__
 
+#include <glib.h>
+
 #define DEFAULT_LOCALE		"No Locale"
 #define PKG_STRING_LEN_MAX 1024
 #define PKGMGR_PARSER_EMPTY_STR		""
 
+#define ZONE_HOST "host"
+
 typedef struct metadata_x {
 	const char *key;
 	const char *value;
-	struct metadata_x *prev;
-	struct metadata_x *next;
 } metadata_x;
-
-typedef struct privilege_x {
-	const char *text;
-	struct privilege_x *prev;
-	struct privilege_x *next;
-} privilege_x;
-
-typedef struct privileges_x {
-	struct privilege_x *privilege;
-	struct privileges_x *prev;
-	struct privileges_x *next;
-} privileges_x;
 
 typedef struct permission_x {
 	const char *type;
 	const char *value;
-	struct permission_x *prev;
-	struct permission_x *next;
 } permission_x;
 
 typedef struct icon_x {
@@ -61,8 +49,6 @@ typedef struct icon_x {
 	const char *section;
 	const char *size;
 	const char *resolution;
-	struct icon_x *prev;
-	struct icon_x *next;
 } icon_x;
 
 typedef struct image_x {
@@ -70,73 +56,53 @@ typedef struct image_x {
 	const char *text;
 	const char *lang;
 	const char *section;
-	struct image_x *prev;
-	struct image_x *next;
 } image_x;
 
 typedef struct allowed_x {
 	const char *name;
 	const char *text;
-	struct allowed_x *prev;
-	struct allowed_x *next;
 } allowed_x;
 
 typedef struct request_x {
 	const char *text;
-	struct request_x *prev;
-	struct request_x *next;
 } request_x;
 
 typedef struct define_x {
 	const char *path;
-	struct allowed_x *allowed;
-	struct request_x *request;
-	struct define_x *prev;
-	struct define_x *next;
+	GList *allowed;
+	GList *request;
 } define_x;
 
 typedef struct datashare_x {
-	struct define_x *define;
-	struct request_x *request;
-	struct datashare_x *prev;
-	struct datashare_x *next;
+	GList *define;
+	GList *request;
 } datashare_x;
 
 typedef struct description_x {
 	const char *name;
 	const char *text;
 	const char *lang;
-	struct description_x *prev;
-	struct description_x *next;
 } description_x;
 
 typedef struct registry_x {
 	const char *name;
 	const char *text;
-	struct registry_x *prev;
-	struct registry_x *next;
 } registry_x;
 
 typedef struct database_x {
 	const char *name;
 	const char *text;
-	struct database_x *prev;
-	struct database_x *next;
 } database_x;
 
 typedef struct layout_x {
 	const char *name;
 	const char *text;
-	struct layout_x *prev;
-	struct layout_x *next;
 } layout_x;
 
 typedef struct label_x {
 	const char *name;
 	const char *text;
 	const char *lang;
-	struct label_x *prev;
-	struct label_x *next;
 } label_x;
 
 typedef struct author_x {
@@ -144,123 +110,96 @@ typedef struct author_x {
 	const char *href;
 	const char *text;
 	const char *lang;
-	struct author_x *prev;
-	struct author_x *next;
 } author_x;
 
 typedef struct license_x {
 	const char *text;
 	const char *lang;
-	struct license_x *prev;
-	struct license_x *next;
 } license_x;
 
 typedef struct operation_x {
 	const char *name;
 	const char *text;
-	struct operation_x *prev;
-	struct operation_x *next;
 } operation_x;
 
 typedef struct uri_x {
 	const char *name;
 	const char *text;
-	struct uri_x *prev;
-	struct uri_x *next;
 } uri_x;
 
 typedef struct mime_x {
 	const char *name;
 	const char *text;
-	struct mime_x *prev;
-	struct mime_x *next;
 } mime_x;
 
 typedef struct subapp_x {
 	const char *name;
 	const char *text;
-	struct subapp_x *prev;
-	struct subapp_x *next;
 } subapp_x;
 
 typedef struct condition_x {
 	const char *name;
 	const char *text;
-	struct condition_x *prev;
-	struct condition_x *next;
 } condition_x;
 
 typedef struct notification_x {
 	const char *name;
 	const char *text;
-	struct notification_x *prev;
-	struct notification_x *next;
 } notification_x;
 
 typedef struct appsvc_x {
 	const char *text;
-	struct operation_x *operation;
-	struct uri_x *uri;
-	struct mime_x *mime;
-	struct subapp_x *subapp;
-	struct appsvc_x *prev;
-	struct appsvc_x *next;
+	GList *operation;
+	GList *uri;
+	GList *mime;
+	GList *subapp;
 } appsvc_x;
 
-typedef struct category_x{
+typedef struct category_x {
 	const char *name;
-	struct category_x *prev;
-	struct category_x *next;
 } category_x;
 
 typedef struct launchconditions_x {
 	const char *text;
-	struct condition_x *condition;
-	struct launchconditions_x *prev;
-	struct launchconditions_x *next;
+	GList *condition;
 } launchconditions_x;
 
 typedef struct compatibility_x {
 	const char *name;
 	const char *text;
-	struct compatibility_x *prev;
-	struct compatibility_x *next;
-}compatibility_x;
+} compatibility_x;
 
 typedef struct deviceprofile_x {
 	const char *name;
 	const char *text;
-	struct deviceprofile_x *prev;
-	struct deviceprofile_x *next;
-}deviceprofile_x;
+} deviceprofile_x;
 
 typedef struct resolution_x {
 	const char *mimetype;
 	const char *urischeme;
-	struct resolution_x *prev;
-	struct resolution_x *next;
 } resolution_x;
 
 typedef struct capability_x {
 	const char *operationid;
 	const char *access;
-	struct resolution_x *resolution;
-	struct capability_x *prev;
-	struct capability_x *next;
+	GList *resolution;
 } capability_x;
 
 typedef struct datacontrol_x {
 	const char *providerid;
 	const char *access;
 	const char *type;
-	struct datacontrol_x *prev;
-	struct datacontrol_x *next;
 } datacontrol_x;
+
+typedef struct appcontrol_x {
+	const char *operation;
+	const char *uri;
+	const char *mime;
+} appcontrol_x;
 
 typedef struct uiapplication_x {
 	const char *appid;
 	const char *exec;
-	const char *ambient_support;
 	const char *nodisplay;
 	const char *multiple;
 	const char *taskmanage;
@@ -295,25 +234,38 @@ typedef struct uiapplication_x {
 	const char *support_disable;
 	const char *ui_gadget;
 	const char *removable;
+	const char *companion_type;
 	const char *support_mode;
 	const char *support_feature;
+	const char *support_category;
 	const char *satui_label;
 	const char *package_type;
 	const char *package_system;
 	const char *package_installed_time;
-	struct label_x *label;
-	struct icon_x *icon;
-	struct image_x *image;
-	struct appsvc_x *appsvc;
-	struct category_x *category;
-	struct metadata_x *metadata;
-	struct permission_x *permission;
-	struct launchconditions_x *launchconditions;
-	struct notification_x *notification;
-	struct datashare_x *datashare;
-	struct datacontrol_x *datacontrol;
-	struct uiapplication_x *prev;
-	struct uiapplication_x *next;
+	const char *launch_mode;
+	const char *alias_appid;
+	const char *effective_appid;
+	const char *api_version;
+#ifdef _APPFW_FEATURE_EXPANSION_PKG_INSTALL
+	const char *tep_name;
+#endif
+	GList *label;
+	GList *icon;
+	GList *image;
+	GList *appsvc;
+	GList *category;
+	GList *metadata;
+	GList *permission;
+	GList *launchconditions;
+	GList *notification;
+	GList *datashare;
+	GList *datacontrol;
+	GList *background_category;
+	GList *appcontrol;
+#ifdef _APPFW_FEATURE_MOUNT_INSTALL
+	int ismount;
+	const char *tpk_name;
+#endif
 } uiapplication_x;
 
 typedef struct serviceapplication_x {
@@ -325,46 +277,37 @@ typedef struct serviceapplication_x {
 	const char *type;
 	const char *package;
 	const char *permission_type;
-	struct label_x *label;
-	struct icon_x *icon;
-	struct appsvc_x *appsvc;
-	struct category_x *category;
-	struct metadata_x *metadata;
-	struct permission_x *permission;
-	struct datacontrol_x *datacontrol;
-	struct launchconditions_x *launchconditions;
-	struct notification_x *notification;
-	struct datashare_x *datashare;
-	struct serviceapplication_x *prev;
-	struct serviceapplication_x *next;
+	GList *label;
+	GList *icon;
+	GList *appsvc;
+	GList *category;
+	GList *metadata;
+	GList *permission;
+	GList *datacontrol;
+	GList *launchconditions;
+	GList *notification;
+	GList *datashare;
+	GList *background_category;
 } serviceapplication_x;
 
 typedef struct daemon_x {
 	const char *name;
 	const char *text;
-	struct daemon_x *prev;
-	struct daemon_x *next;
 } daemon_x;
 
 typedef struct theme_x {
 	const char *name;
 	const char *text;
-	struct theme_x *prev;
-	struct theme_x *next;
 } theme_x;
 
 typedef struct font_x {
 	const char *name;
 	const char *text;
-	struct font_x *prev;
-	struct font_x *next;
 } font_x;
 
 typedef struct ime_x {
 	const char *name;
 	const char *text;
-	struct ime_x *prev;
-	struct ime_x *next;
 } ime_x;
 
 typedef struct manifest_x {
@@ -392,25 +335,28 @@ typedef struct manifest_x {
 	const char *nodisplay_setting;		/**< package no display setting menu*/
 	const char *support_disable;		/**< package support disable flag*/
 	const char *mother_package;		/**< package is mother package*/
+	const char *api_version;		/**< minimum version of API package using*/
+#ifdef _APPFW_FEATURE_EXPANSION_PKG_INSTALL
+	const char *tep_name;
+#endif
 	const char *support_mode;		/**< package support mode*/
-	const char *support_reset;		/**< package support reset*/
-	const char *use_reset;		/**< package use reset*/
+	const char *backend_installer;		/**< package backend installer*/
+	const char *custom_smack_label;		/**< package custom smack label*/
 	const char *groupid;		/**< package groupid*/
-	const char *hash;			/**<manifest file's hash */
-	struct icon_x *icon;		/**< package icon*/
-	struct label_x *label;		/**< package label*/
-	struct author_x *author;		/**< package author*/
-	struct description_x *description;		/**< package description*/
-	struct license_x *license;		/**< package license*/
-	struct privileges_x *privileges;	/**< package privileges*/
-	struct uiapplication_x *uiapplication;		/**< package's ui application*/
-	struct serviceapplication_x *serviceapplication;		/**< package's service application*/
-	struct daemon_x *daemon;		/**< package daemon*/
-	struct theme_x *theme;		/**< package theme*/
-	struct font_x *font;		/**< package font*/
-	struct ime_x *ime;		/**< package ime*/
-	struct compatibility_x *compatibility;		/**< package compatibility*/
-	struct deviceprofile_x *deviceprofile;		/**< package device profile*/
+	GList *icon;		/**< package icon*/
+	GList *label;		/**< package label*/
+	GList *author;		/**< package author*/
+	GList *description;		/**< package description*/
+	GList *license;		/**< package license*/
+	GList *privileges;	/**< package privileges*/
+	GList *uiapplication;		/**< package's ui application*/
+	GList *serviceapplication;		/**< package's service application*/
+	GList *daemon;		/**< package daemon*/
+	GList *theme;		/**< package theme*/
+	GList *font;		/**< package font*/
+	GList *ime;		/**< package ime*/
+	GList *compatibility;		/**< package compatibility*/
+	GList *deviceprofile;		/**< package device profile*/
 } manifest_x;
 
 /**
@@ -498,7 +444,7 @@ typedef struct manifest_x {
 	} while (0)
 
 void _pkgmgrinfo_basic_free_manifest_x(manifest_x *mfx);
+void _pkgmgrinfo_basic_free_uiapplication_x(uiapplication_x *uiapplication);
 
-char* pkgmgrinfo_basic_generate_hash_for_file(const char* file);
 
 #endif  /* __PKGMGRINFO_BASIC_H__ */

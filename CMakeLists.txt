@@ -6,6 +6,19 @@ PROJECT(pkgmgr-info C)
 SET(VERSION 0.0.17)
 SET(VERSION_MAJOR 0)
 
+IF(_APPFW_FEATURE_EXPANSION_PKG_INSTALL)
+        ADD_DEFINITIONS("-D_APPFW_FEATURE_EXPANSION_PKG_INSTALL")
+ENDIF(_APPFW_FEATURE_EXPANSION_PKG_INSTALL)
+
+IF(_APPFW_FEATURE_DELTA_UPDATE)
+        ADD_DEFINITIONS("-D_APPFW_FEATURE_DELTA_UPDATE")
+ENDIF(_APPFW_FEATURE_DELTA_UPDATE)
+
+IF(_APPFW_FEATURE_MOUNT_INSTALL)
+        ADD_DEFINITIONS("-D_APPFW_FEATURE_MOUNT_INSTALL")
+ENDIF(_APPFW_FEATURE_MOUNT_INSTALL)
+
+
 SET(PREFIX ${CMAKE_INSTALL_PREFIX})
 SET(EXEC_PREFIX "\${prefix}")
 SET(INCLUDEDIR "\${prefix}/include")
@@ -17,19 +30,20 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src ${CMAKE_
 
 ### Required packages
 INCLUDE(FindPkgConfig)
-pkg_check_modules(pkgs REQUIRED openssl glib-2.0 dlog vconf sqlite3 db-util libxml-2.0 dbus-1 dbus-glib-1 journal)
+pkg_check_modules(pkgs REQUIRED openssl glib-2.0 dlog vconf sqlite3 db-util libxml-2.0 dbus-1 dbus-glib-1 bundle )
 
 FOREACH(flag ${pkgs_CFLAGS})
 	SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
 ENDFOREACH(flag)
 
 
-pkg_check_modules(libpkgs REQUIRED openssl glib-2.0 dlog vconf sqlite3 db-util libxml-2.0 dbus-1 dbus-glib-1 journal)
+pkg_check_modules(libpkgs REQUIRED openssl glib-2.0 dlog vconf sqlite3 db-util libxml-2.0 dbus-1 dbus-glib-1 bundle)
 
 FOREACH(flag ${libpkgs_CFLAGS})
 	SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
 ENDFOREACH(flag)
 
+SET(pc_requires "glib-2.0")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
 
@@ -40,18 +54,20 @@ SET(debug_type "-DPM_CONSOLE_USE") 		# for debug - use console window
 SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} -fvisibility=hidden")
 SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} -g -Wall")
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
+SET(PC_REQUIRED ${pc_requires})
 
 ################## ## build comm libraries
 add_subdirectory(parser)
 
 ## build pkgmgr-info library
-add_library(pkgmgr-info SHARED 	src/pkgmgrinfo_client.c src/pkgmgrinfo_db.c src/pkgmgrinfo_certinfo.c
-								src/pkgmgrinfo_appinfo.c src/pkgmgrinfo_pkginfo.c
-								src/pkgmgrinfo_private.c
-								src/pkgmgrinfo_basic.c
-								src/pkgmgrinfo_feature.c
-								)
-
+add_library(pkgmgr-info SHARED
+		src/pkgmgrinfo_client.c
+		src/pkgmgrinfo_db.c
+		src/pkgmgrinfo_certinfo.c
+		src/pkgmgrinfo_appinfo.c src/pkgmgrinfo_pkginfo.c
+		src/pkgmgrinfo_private.c
+		src/pkgmgrinfo_basic.c
+		src/pkgmgrinfo_resource.c )
 
 SET_TARGET_PROPERTIES(pkgmgr-info PROPERTIES SOVERSION ${VERSION_MAJOR})
 SET_TARGET_PROPERTIES(pkgmgr-info PROPERTIES VERSION ${VERSION})
@@ -66,9 +82,10 @@ configure_file(dump_pkgmgr.sh.in dump_pkgmgr.sh @ONLY)
 INSTALL(TARGETS pkgmgr-info DESTINATION ${LIB_INSTALL_DIR} COMPONENT RuntimeLibraries)
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/pkgmgr-info.pc DESTINATION ${LIB_INSTALL_DIR}/pkgconfig)
 INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/pkgmgr-info.h DESTINATION include)
+INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/pkgmgrinfo_resource.h DESTINATION include)
 INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/pkgmgrinfo_basic.h DESTINATION include)
-INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/pkgmgrinfo_feature.h DESTINATION include)
 INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/pkgmgrinfo_type.h DESTINATION include)
+INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/pkgmgrinfo_zone.h DESTINATION include)
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/parser_path.conf DESTINATION ${PREFIX}/etc/package-manager/)
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/dump_pkgmgr.sh DESTINATION /opt/etc/dump.d/module.d/)
 

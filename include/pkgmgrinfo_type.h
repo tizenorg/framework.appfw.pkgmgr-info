@@ -27,6 +27,43 @@
 extern "C" {
 #endif
 
+/** Integer property for mode*/
+#define	PMINFO_SUPPORT_MODE_ULTRA_POWER_SAVING		0x00000001
+#define	PMINFO_SUPPORT_MODE_COOL_DOWN				0x00000002
+#define	PMINFO_SUPPORT_MODE_SCREEN_READER			0x00000004
+#define	PMINFO_SUPPORT_MODE_ACTIVATION_STUB			0x00000008
+
+#define	PMINFO_SUPPORT_FEATURE_MULTI_WINDOW			0x00000001
+#define	PMINFO_SUPPORT_FEATURE_OOM_TERMINATION		0x00000002
+#define	PMINFO_SUPPORT_FEATURE_LARGE_MEMORY			0x00000004
+#define	PMINFO_SUPPORT_FEATURE_HIGH_PRIORITY		0x00000008
+
+#define	PMINFO_SUPPORT_CATEGORY_LOCK_APP			0x00000001
+#define	PMINFO_SUPPORT_CATEGORY_HOME_APP			0x00000002
+#define	PMINFO_SUPPORT_CATEGORY_IME_APP				0x00000004
+
+/*app background category value */
+#define APP_BG_CATEGORY_USER_DISABLE_FALSE_VAL		0x00000
+#define APP_BG_CATEGORY_USER_DISABLE_TRUE_VAL		0x00001
+#define APP_BG_CATEGORY_MEDIA_VAL					0x00002
+#define APP_BG_CATEGORY_DOWNLOAD_VAL				0x00004
+#define APP_BG_CATEGORY_BGNETWORK_VAL				0x00008
+#define APP_BG_CATEGORY_LOCATION_VAL				0x00010
+#define APP_BG_CATEGORY_SENSOR_VAL					0x00020
+#define APP_BG_CATEGORY_IOTCOMM_VAL					0x00040
+#define APP_BG_CATEGORY_SYSTEM_VAL					0x00080
+
+#define APP_BG_CATEGORY_USER_DISABLE_FALSE_STR 		"enable"
+#define APP_BG_CATEGORY_USER_DISABLE_TRUE_STR 		"disable"
+#define APP_BG_CATEGORY_MEDIA_STR 					"media"
+#define APP_BG_CATEGORY_DOWNLOAD_STR 				"download"
+#define APP_BG_CATEGORY_BGNETWORK_STR 				"background-network"
+#define APP_BG_CATEGORY_LOCATION_STR 				"location"
+#define APP_BG_CATEGORY_SENSOR_STR 					"sensor"
+#define APP_BG_CATEGORY_IOTCOMM_STR 				"iot-communication"
+#define APP_BG_CATEGORY_SYSTEM 						"system"
+
+
 /**
  * @brief A handle to insert certificate information
  */
@@ -279,18 +316,34 @@ typedef int (*pkgmgrinfo_pkg_privilege_list_cb ) (const char *privilege_name, vo
 typedef int (*pkgmgrinfo_app_metadata_list_cb ) (const char *metadata_key, const char *metadata_value, void *user_data);
 
 /**
- * @fn int (*pkgmgrinfo_app_control_list_cb ) (pkgmgrinfo_appcontrol_h handle, void *user_data)
+ * @fn int (*pkgmgrinfo_app_control_list_cb ) const char *operation, const char *uri, const char *mime, void *user_data)
  *
  * @brief Specifies the type of function passed to pkgmgrinfo_appinfo_foreach_appcontrol()
  *
- * @param[in] handle the appcontrol handle to be used to get operation, uri and mime info
+ * @param[in] operation, retrieved operation
+ * @param[in] uri, retrieved uri
+ * @param[in] mime, retrieved mime
  * @param[in] user_data user data passed to pkgmgrinfo_appinfo_foreach_appcontrol()
  *
  * @return 0 if success, negative value(<0) if fail. Callback is not called if return value is negative.\n
  *
  * @see  pkgmgrinfo_appinfo_foreach_appcontrol()
  */
-typedef int (*pkgmgrinfo_app_control_list_cb ) (pkgmgrinfo_appcontrol_h handle, void *user_data);
+typedef int (*pkgmgrinfo_app_control_list_cb ) (const char *operation, const char *uri, const char *mime, void *user_data);
+
+/**
+ * @fn int (*pkgmgrinfo_app_background_category_list_cb ) (const char *category_name, void *user_data)
+ *
+ * @brief Specifies the type of function passed to pkgmgrinfo_appinfo_foreach_background_category()
+ *
+ * @param[in] category_name retrieved background category name
+ * @param[in] user_data user data passed to pkgmgrinfo_appinfo_foreach_background_category
+ *
+ * @return 0 if success, negative value(<0) if fail. Callback is not called if return value is negative.\n
+ *
+ * @see  pkgmgrinfo_appinfo_foreach_background_category()
+ */
+typedef int (*pkgmgrinfo_app_background_category_list_cb ) (const char *category_name, void *user_data);
 
 /**
  * @brief type definition.
@@ -299,6 +352,9 @@ typedef int (*pkgmgrinfo_handler)(int req_id, const char *pkg_type,
 				const char *pkgid, const char *key,
 				const char *val, const void *pmsg, void *data);
 
+typedef int (*pkgmgrinfo_handler_zone)(int req_id, const char *pkg_type,
+				const char *pkgid, const char *key,
+				const char *val, const void *pmsg, void *data, const char *zone);
 #ifdef __cplusplus
 }
 #endif

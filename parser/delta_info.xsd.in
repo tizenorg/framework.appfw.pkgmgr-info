@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" targetNamespace="http://tizen.org/ns/delta" xmlns:delta="http://tizen.org/ns/delta">
+  <xs:element name="delta">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:choice maxOccurs="unbounded" minOccurs="0">
+          <xs:element ref="delta:add-files"/>
+          <xs:element ref="delta:remove-files"/>
+          <xs:element ref="delta:modify-files"/>
+        </xs:choice>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="add-files">
+    <xs:complexType>
+       <xs:sequence>
+         <xs:choice maxOccurs="unbounded" minOccurs="0">
+           <xs:element name="file"/>
+         </xs:choice>
+       </xs:sequence>
+       <xs:attribute name="name"/>
+     </xs:complexType>
+  </xs:element>
+  <xs:element name="remove-files">
+    <xs:complexType>
+       <xs:sequence>
+         <xs:choice maxOccurs="unbounded" minOccurs="0">
+           <xs:element name="file"/>
+         </xs:choice>
+       </xs:sequence>
+       <xs:attribute name="name"/>
+     </xs:complexType>
+  </xs:element>
+  <xs:element name="modify-files">
+    <xs:complexType>
+       <xs:sequence>
+         <xs:choice maxOccurs="unbounded" minOccurs="0">
+           <xs:element name="file"/>
+         </xs:choice>
+       </xs:sequence>
+       <xs:attribute name="name"/>
+     </xs:complexType>
+  </xs:element>
+</xs:schema>
+

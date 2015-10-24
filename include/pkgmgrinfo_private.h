@@ -50,11 +50,10 @@
 #endif
 
 #define MMC_PATH "/opt/storage/sdcard"
-#define PKG_SD_PATH MMC_PATH"/app2sd/"
+#define PKG_SD_PATH __pkgmgrinfo_get_default_sd_path()
 
 #define PKG_RW_PATH "/opt/usr/apps/"
 #define PKG_RO_PATH "/usr/apps/"
-#define BLOCK_SIZE      4096 /*in bytes*/
 
 #define PKG_TYPE_STRING_LEN_MAX			128
 #define PKG_VERSION_STRING_LEN_MAX		128
@@ -64,9 +63,9 @@
 #define MAX_QUERY_LEN	4096
 #define MAX_CERT_TYPE	9
 
-#define MANIFEST_DB		"/opt/dbspace/.pkgmgr_parser.db"
-#define CERT_DB			"/opt/dbspace/.pkgmgr_cert.db"
-#define DATACONTROL_DB	"/opt/usr/dbspace/.app-package.db"
+#define MANIFEST_DB		__pkgmgrinfo_get_default_manifest_db()
+#define CERT_DB			__pkgmgrinfo_get_default_cert_db()
+#define DATACONTROL_DB	__pkgmgrinfo_get_default_data_control_db()
 
 /*String properties for filtering based on package info*/
 typedef enum _pkgmgrinfo_pkginfo_filter_prop_str {
@@ -94,8 +93,8 @@ typedef enum _pkgmgrinfo_pkginfo_filter_prop_bool {
 	E_PMINFO_PKGINFO_PROP_PACKAGE_NODISPLAY_SETTING,
 	E_PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_DISABLE,
 	E_PMINFO_PKGINFO_PROP_PACKAGE_DISABLE,
-	E_PMINFO_PKGINFO_PROP_PACKAGE_USE_RESET,
-	E_PMINFO_PKGINFO_PROP_PACKAGE_MAX_BOOL = E_PMINFO_PKGINFO_PROP_PACKAGE_USE_RESET
+	E_PMINFO_PKGINFO_PROP_PACKAGE_SYSTEM,
+	E_PMINFO_PKGINFO_PROP_PACKAGE_MAX_BOOL = E_PMINFO_PKGINFO_PROP_PACKAGE_SYSTEM
 } pkgmgrinfo_pkginfo_filter_prop_bool;
 
 /*Integer properties for filtering based on package info*/
@@ -110,10 +109,8 @@ typedef enum _pkgmgrinfo_pkginfo_filter_prop_int {
 typedef enum _pkgmgrinfo_appinfo_filter_prop_str {
 	E_PMINFO_APPINFO_PROP_APP_MIN_STR = 401,
 	E_PMINFO_APPINFO_PROP_APP_ID = E_PMINFO_APPINFO_PROP_APP_MIN_STR,
-	E_PMINFO_APPINFO_PROP_APP_COMPONENT,
 	E_PMINFO_APPINFO_PROP_APP_COMPONENT_TYPE,
 	E_PMINFO_APPINFO_PROP_APP_EXEC,
-	E_PMINFO_APPINFO_PROP_APP_AMBIENT_SUPPORT,
 	E_PMINFO_APPINFO_PROP_APP_ICON,
 	E_PMINFO_APPINFO_PROP_APP_TYPE,
 	E_PMINFO_APPINFO_PROP_APP_OPERATION,
@@ -122,7 +119,8 @@ typedef enum _pkgmgrinfo_appinfo_filter_prop_str {
 	E_PMINFO_APPINFO_PROP_APP_HWACCELERATION,
 	E_PMINFO_APPINFO_PROP_APP_CATEGORY,
 	E_PMINFO_APPINFO_PROP_APP_SCREENREADER,
-	E_PMINFO_APPINFO_PROP_APP_MAX_STR = E_PMINFO_APPINFO_PROP_APP_CATEGORY
+	E_PMINFO_APPINFO_PROP_APP_BG_CATEGORY,
+	E_PMINFO_APPINFO_PROP_APP_MAX_STR = E_PMINFO_APPINFO_PROP_APP_SCREENREADER
 } pkgmgrinfo_appinfo_filter_prop_str;
 
 /*Boolean properties for filtering based on app info*/
@@ -137,7 +135,8 @@ typedef enum _pkgmgrinfo_appinfo_filter_prop_bool {
 	E_PMINFO_APPINFO_PROP_APP_SUPPORT_DISABLE,
 	E_PMINFO_APPINFO_PROP_APP_DISABLE,
 	E_PMINFO_APPINFO_PROP_APP_REMOVABLE,
-	E_PMINFO_APPINFO_PROP_APP_MAX_BOOL = E_PMINFO_APPINFO_PROP_APP_REMOVABLE
+	E_PMINFO_APPINFO_PROP_APP_BG_USER_DISABLE,
+	E_PMINFO_APPINFO_PROP_APP_MAX_BOOL = E_PMINFO_APPINFO_PROP_APP_BG_USER_DISABLE
 } pkgmgrinfo_appinfo_filter_prop_bool;
 
 /*Integer properties for filtering based on app info*/
@@ -159,9 +158,6 @@ typedef enum _pkgmgrinfo_pkginfo_filter_prop_range {
 typedef struct _pkgmgr_pkginfo_x {
 	manifest_x *manifest_info;
 	char *locale;
-
-	struct _pkgmgr_pkginfo_x *prev;
-	struct _pkgmgr_pkginfo_x *next;
 } pkgmgr_pkginfo_x;
 
 typedef struct _pkgmgr_appinfo_x {
@@ -183,6 +179,7 @@ typedef struct _pkgmgrinfo_node_x {
 	char *value;
 } pkgmgrinfo_node_x;
 
+
 typedef int (*sqlite_query_callback)(void *data, int ncols, char **coltxt, char **colname);
 
 int __exec_db_query(sqlite3 *db, char *query, sqlite_query_callback callback, void *data);
@@ -192,7 +189,7 @@ void __get_filter_condition(gpointer data, char **condition);
 
 void __cleanup_pkginfo(pkgmgr_pkginfo_x *data);
 void __cleanup_appinfo(pkgmgr_appinfo_x *data);
-void __cleanup_list_pkginfo(pkgmgr_pkginfo_x *list_pkginfo, pkgmgr_pkginfo_x *node);
+void __cleanup_list_pkginfo(GList **list_pkginfo);
 
 int __pkginfo_check_installed_storage(pkgmgr_pkginfo_x *pkginfo);
 int __appinfo_check_installed_storage(pkgmgr_appinfo_x *appinfo);
@@ -213,4 +210,13 @@ pkgmgrinfo_appinfo_filter_prop_int _pminfo_appinfo_convert_to_prop_int(const cha
 pkgmgrinfo_appinfo_filter_prop_bool _pminfo_appinfo_convert_to_prop_bool(const char *property);
 pkgmgrinfo_pkginfo_filter_prop_range _pminfo_pkginfo_convert_to_prop_range(const char *property);
 
+int _pminfo_db_open(const char *dbfile, sqlite3 **database);
+int _pminfo_db_open_with_options(const char *dbfile, sqlite3 **database, int flags);
+
+void _pminfo_destroy_node(gpointer data);
+
+const char *__pkgmgrinfo_get_default_manifest_db();
+const char *__pkgmgrinfo_get_default_cert_db();
+const char *__pkgmgrinfo_get_default_data_control_db();
+const char *__pkgmgrinfo_get_default_sd_path();
 #endif  /* __PKGMGRINFO_PRIVATE_H__ */

@@ -29,12 +29,14 @@
 #include <db-util.h>
 #include <glib.h>
 #include <dlfcn.h>
+#include <ctype.h>
 
 #include "pkgmgr_parser_internal.h"
 #include "pkgmgr_parser_db.h"
 
 #include "pkgmgrinfo_debug.h"
 #include "pkgmgrinfo_type.h"
+#include "pkgmgr-info.h"
 
 #ifdef LOG_TAG
 #undef LOG_TAG
@@ -47,16 +49,18 @@
 #define USR_APPSVC_ALIAS_INI "/usr/share/appsvc/alias.ini"
 #define OPT_APPSVC_ALIAS_INI "/opt/usr/share/appsvc/alias.ini"
 #define MANIFEST_DB "/opt/dbspace/.pkgmgr_parser.db"
+
 typedef int (*sqlite_query_callback)(void *data, int ncols, char **coltxt, char **colname);
 
 sqlite3 *pkgmgr_parser_db;
 sqlite3 *pkgmgr_cert_db;
 
-
 #define QUERY_CREATE_TABLE_PACKAGE_INFO "create table if not exists package_info " \
 						"(package text primary key not null, " \
 						"package_type text DEFAULT 'rpm', " \
 						"package_version text, " \
+						"package_api_version text, " \
+						"package_tep_name text, " \
 						"install_location text, " \
 						"package_size text, " \
 						"package_removable text DEFAULT 'true', " \
@@ -80,7 +84,8 @@ sqlite3 *pkgmgr_cert_db;
 						"package_mother_package text DEFAULT 'false', " \
 						"package_disable text DEFAULT 'false', " \
 						"package_support_mode text, " \
-						"package_hash text, " \
+						"package_backend_installer text DEFAULT 'rpm', " \
+						"package_custom_smack_label text, " \
 						"package_reserve1 text," \
 						"package_reserve2 text," \
 						"package_reserve3 text," \
@@ -112,7 +117,6 @@ sqlite3 *pkgmgr_cert_db;
 						"(app_id text primary key not null, " \
 						"app_component text, " \
 						"app_exec text, " \
-						"app_ambient_support text DEFAULT 'false', " \
 						"app_nodisplay text DEFAULT 'false', " \
 						"app_type text, " \
 						"app_onboot text DEFAULT 'false', " \
@@ -143,13 +147,23 @@ sqlite3 *pkgmgr_cert_db;
 						"app_disable text DEFAULT 'false', " \
 						"app_ui_gadget text DEFAULT 'false', " \
 						"app_removable text DEFAULT 'false', " \
+						"app_companion_type text DEFAULT 'false', " \
 						"app_support_mode text, " \
 						"app_support_feature text, " \
+						"app_support_category text, " \
 						"component_type text, " \
 						"package text not null, " \
+						"app_tep_name text, " \
 						"app_package_type text DEFAULT 'rpm', " \
 						"app_package_system text, " \
 						"app_package_installed_time text, " \
+						"app_launch_mode text NOT NULL DEFAULT 'caller', " \
+						"app_alias_appid text, " \
+						"app_effective_appid text, " \
+						"app_background_category INTEGER DEFAULT 0, " \
+						"app_api_version text, " \
+						"app_mount_install INTEGER DEFAULT 0, " \
+						"app_tpk_name text, " \
 						"app_reserve1 text, " \
 						"app_reserve2 text, " \
 						"app_reserve3 text, " \
@@ -303,9 +317,16 @@ sqlite3 *pkgmgr_cert_db;
 						"ON DELETE CASCADE)"
 
 #define QUERY_CREATE_TABLE_PACKAGE_APP_ALIASID "create table if not exists package_app_aliasid" \
-						"(app_id text primary key not null, "\
-						"alias_id text not null)"
+						"(app_id text not null, "\
+						"alias_id text primary key not null, "\
+						"type INTEGER)"
 
+typedef enum {
+	ALIAS_APPID_TYPE_PREDEFINED = 0,
+	ALIAS_APPID_TYPE_APPDEFINED = 1
+} alias_appid_type;
+
+// pkgmgr parser DB
 static int __insert_uiapplication_info(manifest_x *mfx);
 static int __insert_uiapplication_appsvc_info(manifest_x *mfx);
 static int __insert_uiapplication_appcategory_info(manifest_x *mfx);
@@ -323,6 +344,23 @@ static int __delete_manifest_info_from_db(manifest_x *mfx);
 static int __delete_appinfo_from_db(char *db_table, const char *appid);
 static gint __comparefunc(gconstpointer a, gconstpointer b, gpointer userdata);
 static int __pkgmgr_parser_create_db(sqlite3 **db_handle, const char *db_path);
+
+int __verify_label_cb(void *data, int ncols, char **coltxt, char **colname)
+{
+	if (strcasecmp(coltxt[0], PKGMGR_PARSER_EMPTY_STR) == 0) {
+		_LOGE("package_label is PKGMGR_PARSER_EMPTY_STR");
+		return -1;
+	}
+	return 0;
+}
+
+int __exec_verify_label(char *query, sqlite_query_callback callback)
+{
+	if (SQLITE_OK != sqlite3_exec(pkgmgr_parser_db, query, callback, NULL, NULL)) {
+		return -1;
+	}
+	return 0;
+}
 
 static void __str_trim(char *input)
 {
@@ -379,6 +417,12 @@ static int __pkgmgr_parser_create_db(sqlite3 **db_handle, const char *db_path)
 		_LOGD("connect db [%s] failed!\n", db_path);
 		return -1;
 	}
+
+	char *query = NULL;
+	query = sqlite3_mprintf("PRAGMA user_version=%d", PKGMGR_PARSER_DB_VERSION);
+	ret = __evaluate_query(handle, query);
+	sqlite3_free(query);
+
 	*db_handle = handle;
 	return 0;
 }
@@ -389,7 +433,7 @@ int __evaluate_query(sqlite3 *db_handle, char *query)
 	int result;
     result = sqlite3_prepare_v2(db_handle, query, strlen(query), &p_statement, NULL);
     if (result != SQLITE_OK) {
-        _LOGE("Sqlite3 error [%d] : <%s> preparing <%s> querry\n", result, sqlite3_errmsg(db_handle), query);
+        _LOGE("Sqlite3 error [%d] : <%s> preparing <%s> query\n", result, sqlite3_errmsg(db_handle), query);
 		return -1;
     }
 
@@ -443,60 +487,70 @@ static int __exec_db_query(sqlite3 *db, char *query, sqlite_query_callback callb
 	return 0;
 }
 
-GList *__create_locale_list(GList *locale, label_x *lbl, license_x *lcn, icon_x *icn, description_x *dcn, author_x *ath)
+GList *__create_locale_list(GList *locale, GList *lbl, GList *lcn, GList *icn, GList *dcn, GList *ath)
 {
 
 	while(lbl != NULL)
 	{
-		if (lbl->lang)
-			locale = g_list_insert_sorted_with_data(locale, (gpointer)lbl->lang, __comparefunc, NULL);
+		label_x* label = (label_x*)lbl->data;
+		if (label && label->lang)
+			locale = g_list_insert_sorted_with_data(locale, (gpointer)label->lang, __comparefunc, NULL);
 		lbl = lbl->next;
 	}
 	while(lcn != NULL)
 	{
-		if (lcn->lang)
-			locale = g_list_insert_sorted_with_data(locale, (gpointer)lcn->lang, __comparefunc, NULL);
+		license_x *lic = (license_x*)lcn->data;
+		if (lic && lic->lang){
+			locale = g_list_insert_sorted_with_data(locale, (gpointer)lic->lang, __comparefunc, NULL);
+		}
 		lcn = lcn->next;
 	}
 	while(icn != NULL)
 	{
-		if (icn->lang)
-			locale = g_list_insert_sorted_with_data(locale, (gpointer)icn->lang, __comparefunc, NULL);
+		icon_x* icon = (icon_x*)icn->data;
+		if (icon && icon->lang){
+			locale = g_list_insert_sorted_with_data(locale, (gpointer)icon->lang, __comparefunc, NULL);
+		}
 		icn = icn->next;
 	}
 	while(dcn != NULL)
 	{
-		if (dcn->lang)
-			locale = g_list_insert_sorted_with_data(locale, (gpointer)dcn->lang, __comparefunc, NULL);
+		description_x *desc = (description_x*)dcn->data;
+		if (desc && desc->lang)
+			locale = g_list_insert_sorted_with_data(locale, (gpointer)desc->lang, __comparefunc, NULL);
 		dcn = dcn->next;
 	}
 	while(ath != NULL)
 	{
-		if (ath->lang)
-			locale = g_list_insert_sorted_with_data(locale, (gpointer)ath->lang, __comparefunc, NULL);
+		author_x* author = (author_x*)ath->data;
+		if (author && author->lang)
+			locale = g_list_insert_sorted_with_data(locale, (gpointer)author->lang, __comparefunc, NULL);
 		ath = ath->next;
 	}
 	return locale;
 
 }
 
-static GList *__create_icon_list(GList *locale, icon_x *icn)
+static GList *__create_icon_list(GList *locale, GList *icn)
 {
 	while(icn != NULL)
 	{
-		if (icn->section)
-			locale = g_list_insert_sorted_with_data(locale, (gpointer)icn->section, __comparefunc, NULL);
+		icon_x *icon = (icon_x*)icn->data;
+		if (icon && icon->section){
+			locale = g_list_insert_sorted_with_data(locale, (gpointer)icon->section, __comparefunc, NULL);
+		}
 		icn = icn->next;
 	}
 	return locale;
 }
 
-static GList *__create_image_list(GList *locale, image_x *image)
+static GList *__create_image_list(GList *locale, GList *image)
 {
 	while(image != NULL)
 	{
-		if (image->section)
-			locale = g_list_insert_sorted_with_data(locale, (gpointer)image->section, __comparefunc, NULL);
+		image_x* img = (image_x*)image->data;
+		if (img && img->section)
+			locale = g_list_insert_sorted_with_data(locale, (gpointer)img->section, __comparefunc, NULL);
 		image = image->next;
 	}
 	return locale;
@@ -542,14 +596,15 @@ static gint __comparefunc(gconstpointer a, gconstpointer b, gpointer userdata)
 	return 0;
 }
 
-void __extract_data(gpointer data, label_x *lbl, license_x *lcn, icon_x *icn, description_x *dcn, author_x *ath,
+void __extract_data(gpointer data, GList *lbl, GList *lcn, GList *icn, GList *dcn, GList *ath,
 		char **label, char **license, char **icon, char **description, char **author)
 {
 	while(lbl != NULL)
 	{
-		if (lbl->lang) {
-			if (strcmp(lbl->lang, (char *)data) == 0) {
-				*label = (char*)lbl->text;
+		label_x *tmp = (label_x*)lbl->data;
+		if (tmp && tmp->lang) {
+			if (strcmp(tmp->lang, (char *)data) == 0) {
+				*label = (char*)tmp->text;
 				break;
 			}
 		}
@@ -557,9 +612,10 @@ void __extract_data(gpointer data, label_x *lbl, license_x *lcn, icon_x *icn, de
 	}
 	while(lcn != NULL)
 	{
-		if (lcn->lang) {
-			if (strcmp(lcn->lang, (char *)data) == 0) {
-				*license = (char*)lcn->text;
+		license_x *lic = (license_x*)lcn->data;
+		if (lic && lic->lang) {
+			if (strcmp(lic->lang, (char *)data) == 0) {
+				*license = (char*)lic->text;
 				break;
 			}
 		}
@@ -567,11 +623,14 @@ void __extract_data(gpointer data, label_x *lbl, license_x *lcn, icon_x *icn, de
 	}
 	while(icn != NULL)
 	{
-		if (icn->section == NULL) {
-			if (icn->lang) {
-				if (strcmp(icn->lang, (char *)data) == 0) {
-					*icon = (char*)icn->text;
-					break;
+		icon_x *tmp = (icon_x*)icn->data;
+		if(tmp){
+			if (tmp->section == NULL) {
+				if (tmp->lang) {
+					if (strcmp(tmp->lang, (char *)data) == 0) {
+						*icon = (char*)tmp->text;
+						break;
+					}
 				}
 			}
 		}
@@ -579,9 +638,10 @@ void __extract_data(gpointer data, label_x *lbl, license_x *lcn, icon_x *icn, de
 	}
 	while(dcn != NULL)
 	{
-		if (dcn->lang) {
-			if (strcmp(dcn->lang, (char *)data) == 0) {
-				*description = (char*)dcn->text;
+		description_x *desc = (description_x*)dcn->data;
+		if (desc && desc->lang) {
+			if (strcmp(desc->lang, (char *)data) == 0) {
+				*description = (char*)desc->text;
 				break;
 			}
 		}
@@ -589,9 +649,10 @@ void __extract_data(gpointer data, label_x *lbl, license_x *lcn, icon_x *icn, de
 	}
 	while(ath != NULL)
 	{
-		if (ath->lang) {
-			if (strcmp(ath->lang, (char *)data) == 0) {
-				*author = (char*)ath->text;
+		author_x* auth = (author_x*)ath->data;
+		if (auth && auth->lang) {
+			if (strcmp(auth->lang, (char *)data) == 0) {
+				*author = (char*)auth->text;
 				break;
 			}
 		}
@@ -600,14 +661,15 @@ void __extract_data(gpointer data, label_x *lbl, license_x *lcn, icon_x *icn, de
 
 }
 
-static void __extract_icon_data(gpointer data, icon_x *icn, char **icon, char **resolution)
+static void __extract_icon_data(gpointer data, GList *icn, char **icon, char **resolution)
 {
 	while(icn != NULL)
 	{
-		if (icn->section) {
-			if (strcmp(icn->section, (char *)data) == 0) {
-				*icon = (char*)icn->text;
-				*resolution = (char*)icn->resolution;
+		icon_x *tmp = (icon_x*)icn->data;
+		if (tmp && tmp->section) {
+			if (strcmp(tmp->section, (char *)data) == 0) {
+				*icon = (char*)tmp->text;
+				*resolution = (char*)tmp->resolution;
 				break;
 			}
 		}
@@ -615,14 +677,15 @@ static void __extract_icon_data(gpointer data, icon_x *icn, char **icon, char **
 	}
 }
 
-static void __extract_image_data(gpointer data, image_x*image, char **lang, char **img)
+static void __extract_image_data(gpointer data, GList *image, char **lang, char **img)
 {
 	while(image != NULL)
 	{
-		if (image->section) {
-			if (strcmp(image->section, (char *)data) == 0) {
-				*lang = (char*)image->lang;
-				*img = (char*)image->text;
+		image_x* tmp = (image_x*)image->data;
+		if (tmp && tmp->section) {
+			if (strcmp(tmp->section, (char *)data) == 0) {
+				*lang = (char*)tmp->lang;
+				*img = (char*)tmp->text;
 				break;
 			}
 		}
@@ -641,11 +704,11 @@ static void __insert_pkglocale_info(gpointer data, gpointer userdata)
 	char *query = NULL;
 
 	manifest_x *mfx = (manifest_x *)userdata;
-	label_x *lbl = mfx->label;
-	license_x *lcn = mfx->license;
-	icon_x *icn = mfx->icon;
-	description_x *dcn = mfx->description;
-	author_x *ath = mfx->author;
+	GList *lbl = mfx->label;
+	GList *lcn = mfx->license;
+	GList *icn = mfx->icon;
+	GList *dcn = mfx->description;
+	GList *ath = mfx->author;
 
 	__extract_data(data, lbl, lcn, icn, dcn, ath, &label, &license, &icon, &description, &author);
 	if (!label && !description && !icon && !license && !author)
@@ -671,31 +734,37 @@ static void __insert_pkglocale_info(gpointer data, gpointer userdata)
 
 static int __insert_uiapplication_datacontrol_info(manifest_x *mfx)
 {
-	uiapplication_x *up = mfx->uiapplication;
-	datacontrol_x *dc = NULL;
+	uiapplication_x *up = NULL;
+	GList *list_up = mfx->uiapplication;
+	GList *dc = NULL;
+	datacontrol_x *datacontrol = NULL;
 	int ret = -1;
 	char *query = NULL;
 
-	while (up != NULL)
+	while (list_up != NULL)
 	{
+		up = (uiapplication_x *)list_up->data;
 		dc = up->datacontrol;
 		while (dc != NULL) {
-			query = sqlite3_mprintf("insert into package_app_data_control(app_id, providerid, access, type) " \
-				"values(%Q, %Q, %Q, %Q)", \
-				up->appid,
-				dc->providerid,
-				dc->access,
-				dc->type);
+			datacontrol = (datacontrol_x*)dc->data;
+			if(datacontrol){
+				query = sqlite3_mprintf("insert into package_app_data_control(app_id, providerid, access, type) " \
+					"values(%Q, %Q, %Q, %Q)", \
+					up->appid,
+					datacontrol->providerid,
+					datacontrol->access,
+					datacontrol->type);
 
-			ret = __exec_query(query);
-			sqlite3_free(query);
-			if (ret == -1) {
-				_LOGD("Package UiApp Data Control DB Insert Failed\n");
-				return -1;
+				ret = __exec_query(query);
+				sqlite3_free(query);
+				if (ret == -1) {
+					_LOGD("Package UiApp Data Control DB Insert Failed\n");
+					return -1;
+				}
 			}
 			dc = dc->next;
 		}
-		up = up->next;
+		list_up = list_up->next;
 	}
 	return 0;
 }
@@ -708,8 +777,8 @@ static void __insert_uiapplication_locale_info(gpointer data, gpointer userdata)
 	char *query = NULL;
 
 	uiapplication_x *up = (uiapplication_x*)userdata;
-	label_x *lbl = up->label;
-	icon_x *icn = up->icon;
+	GList *lbl = up->label;
+	GList *icn = up->icon;
 
 	__extract_data(data, lbl, NULL, icn, NULL, NULL, &label, NULL, &icon, NULL, NULL);
 	if (!label && !icon)
@@ -748,6 +817,17 @@ static void __insert_uiapplication_locale_info(gpointer data, gpointer userdata)
 			ret = __exec_query_no_msg(update_query);
 			sqlite3_free(update_query);
 		}
+
+		update_query = sqlite3_mprintf("select package_label from package_localized_info " \
+			"where package=%Q and package_locale=%Q", up->package, (char*)data);
+		ret = __exec_verify_label(update_query, __verify_label_cb);
+		sqlite3_free(update_query);
+		if (ret < 0) {
+			update_query = sqlite3_mprintf("update package_localized_info set package_label=%Q " \
+				"where package=%Q and package_locale=%Q", __get_str(label), up->package, (char*)data);
+			ret = __exec_query_no_msg(update_query);
+			sqlite3_free(update_query);
+		}
 	}
 }
 
@@ -759,7 +839,7 @@ static void __insert_uiapplication_icon_section_info(gpointer data, gpointer use
 	char * query = NULL;
 
 	uiapplication_x *up = (uiapplication_x*)userdata;
-	icon_x *icn = up->icon;
+	GList *icn = up->icon;
 
 	__extract_icon_data(data, icn, &icon, &resolution);
 	if (!icon && !resolution)
@@ -785,7 +865,7 @@ static void __insert_uiapplication_image_info(gpointer data, gpointer userdata)
 	char *query = NULL;
 
 	uiapplication_x *up = (uiapplication_x*)userdata;
-	image_x *image = up->image;
+	GList *image = up->image;
 
 	__extract_image_data(data, image, &lang, &img);
 	if (!lang && !img)
@@ -804,11 +884,13 @@ static void __insert_uiapplication_image_info(gpointer data, gpointer userdata)
 
 static int __insert_ui_mainapp_info(manifest_x *mfx)
 {
-	uiapplication_x *up = mfx->uiapplication;
+	uiapplication_x *up = NULL;
+	GList *list_up = mfx->uiapplication;
 	int ret = -1;
 	char *query = NULL;
-	while(up != NULL)
+	while(list_up != NULL)
 	{
+		up = (uiapplication_x *)list_up->data;
 		query = sqlite3_mprintf("update package_app_info set app_mainapp=%Q where app_id=%Q", up->mainapp, up->appid);
 
 		ret = __exec_query(query);
@@ -817,17 +899,21 @@ static int __insert_ui_mainapp_info(manifest_x *mfx)
 			_LOGD("Package UiApp Info DB Insert Failed\n");
 			return -1;
 		}
-		if (strcasecmp(up->mainapp, "True") == 0) {
-			FREE_AND_NULL(mfx->mainapp_id);
+		if (strcasecmp(up->mainapp, "True")==0) {
+
+			if (mfx->mainapp_id != NULL)
+				free(mfx->mainapp_id);
+
 			mfx->mainapp_id = strdup(up->appid);
 		}
 
-		up = up->next;
+		list_up = list_up->next;
 	}
 
 	if (mfx->mainapp_id == NULL){
-		if (mfx->uiapplication && mfx->uiapplication->appid) {
-			query = sqlite3_mprintf("update package_app_info set app_mainapp='true' where app_id=%Q", mfx->uiapplication->appid);
+		if (mfx->uiapplication && up->appid) {
+			up = (uiapplication_x *)mfx->uiapplication->data;
+			query = sqlite3_mprintf("update package_app_info set app_mainapp='true' where app_id=%Q", up->appid);
 		} else {
 			_LOGD("Not valid appid\n");
 			return -1;
@@ -840,9 +926,9 @@ static int __insert_ui_mainapp_info(manifest_x *mfx)
 			return -1;
 		}
 
-		FREE_AND_NULL(mfx->uiapplication->mainapp);
-		mfx->uiapplication->mainapp= strdup("true");
-		mfx->mainapp_id = strdup(mfx->uiapplication->appid);
+		FREE_AND_NULL(up->mainapp);
+		up->mainapp= strdup("true");
+		mfx->mainapp_id = strdup(up->appid);
 	}
 
 	query = sqlite3_mprintf("update package_info set mainapp_id=%Q where package=%Q", mfx->mainapp_id, mfx->package);
@@ -855,13 +941,49 @@ static int __insert_ui_mainapp_info(manifest_x *mfx)
 
 	return 0;
 }
+
+static int __convert_background_category(GList *category_list)
+{
+	int ret = 0;
+	GList *tmp_list = category_list;
+	char *category_data = NULL;
+
+	if (category_list == NULL)
+		return 0;
+
+	while (tmp_list != NULL) {
+		category_data = (char *)tmp_list->data;
+		if (strcmp(category_data, APP_BG_CATEGORY_MEDIA_STR) == 0) {
+			ret = ret | APP_BG_CATEGORY_MEDIA_VAL;
+		} else if (strcmp(category_data, APP_BG_CATEGORY_DOWNLOAD_STR) == 0) {
+			ret = ret | APP_BG_CATEGORY_DOWNLOAD_VAL;
+		} else if (strcmp(category_data, APP_BG_CATEGORY_BGNETWORK_STR) == 0) {
+			ret = ret | APP_BG_CATEGORY_BGNETWORK_VAL;
+		} else if (strcmp(category_data, APP_BG_CATEGORY_LOCATION_STR) == 0) {
+			ret = ret | APP_BG_CATEGORY_LOCATION_VAL;
+		} else if (strcmp(category_data, APP_BG_CATEGORY_SENSOR_STR) == 0) {
+			ret = ret | APP_BG_CATEGORY_SENSOR_VAL;
+		} else if (strcmp(category_data, APP_BG_CATEGORY_IOTCOMM_STR) == 0) {
+			ret = ret | APP_BG_CATEGORY_IOTCOMM_VAL;
+		} else if (strcmp(category_data, APP_BG_CATEGORY_SYSTEM) == 0) {
+			ret = ret | APP_BG_CATEGORY_SYSTEM_VAL;
+		} else {
+			_LOGE("Unidentified category [%s]", category_data);
+		}
+		tmp_list = g_list_next(tmp_list);
+	}
+	return ret;
+}
+
 /* _PRODUCT_LAUNCHING_ENHANCED_
 *  up->indicatordisplay, up->portraitimg, up->landscapeimg, up->guestmode_appstatus
 */
 static int __insert_uiapplication_info(manifest_x *mfx)
 {
-	uiapplication_x *up = mfx->uiapplication;
+	uiapplication_x *up = NULL;
+	GList *list_up = mfx->uiapplication;
 	int ret = -1;
+	int background_value = 0;
 	char *query = NULL;
 	char *type = NULL;
 
@@ -870,20 +992,25 @@ static int __insert_uiapplication_info(manifest_x *mfx)
 	else
 		type = strdup("rpm");
 
-	while(up != NULL)
+	while(list_up != NULL)
 	{
-		query = sqlite3_mprintf("insert into package_app_info(app_id, app_component, app_exec, app_ambient_support, app_nodisplay, app_type, app_onboot, " \
+		up = (uiapplication_x *)list_up->data;
+		background_value = __convert_background_category(up->background_category);
+		if (background_value < 0) {
+			_LOGE("Failed to retrieve background value[%d]", background_value);
+			background_value = 0;
+		}
+		query = sqlite3_mprintf("insert into package_app_info(app_id, app_component, app_exec, app_nodisplay, app_type, app_onboot, " \
 			"app_multiple, app_autorestart, app_taskmanage, app_enabled, app_hwacceleration, app_screenreader, app_mainapp , app_recentimage, " \
 			"app_launchcondition, app_indicatordisplay, app_portraitimg, app_landscapeimg, app_effectimage_type, app_guestmodevisibility, app_permissiontype, "\
 			"app_preload, app_submode, app_submode_mainid, app_installed_storage, app_process_pool, app_multi_instance, app_multi_instance_mainid, app_multi_window, app_support_disable, "\
-			"app_ui_gadget, app_removable, app_support_mode, app_support_feature, component_type, package, "\
-			"app_package_type, app_package_system, app_package_installed_time"\
+			"app_ui_gadget, app_removable, app_companion_type, app_support_mode, app_support_feature, app_support_category, component_type, package, "\
+			"app_package_type, app_package_system, app_package_installed_time, app_launch_mode, app_alias_appid, app_effective_appid, app_background_category, app_api_version"\
 			") " \
-			"values(%Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q)",\
+			"values(%Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, '%d', %Q)",\
 			up->appid,
 			"uiapp",
 			up->exec,
-			up->ambient_support,
 			up->nodisplay,
 			up->type,
 			up->onboot,
@@ -913,13 +1040,20 @@ static int __insert_uiapplication_info(manifest_x *mfx)
 			mfx->support_disable,
 			up->ui_gadget,
 			mfx->removable,
+			up->companion_type,
 			mfx->support_mode,
 			up->support_feature,
+			up->support_category,
 			up->component_type,
 			mfx->package,
 			type,
 			mfx->system,
-			mfx->installed_time
+			mfx->installed_time,
+			up->launch_mode,
+			__get_str(up->alias_appid),
+			__get_str(up->effective_appid),
+			background_value,
+			__get_str(mfx->api_version)
 			);
 
 		ret = __exec_query(query);
@@ -929,7 +1063,7 @@ static int __insert_uiapplication_info(manifest_x *mfx)
 			FREE_AND_NULL(type);
 			return -1;
 		}
-		up = up->next;
+		list_up = list_up->next;
 	}
 	FREE_AND_NULL(type);
 	return 0;
@@ -937,46 +1071,78 @@ static int __insert_uiapplication_info(manifest_x *mfx)
 
 static int __insert_uiapplication_appcategory_info(manifest_x *mfx)
 {
-	uiapplication_x *up = mfx->uiapplication;
-	category_x *ct = NULL;
+	uiapplication_x *up = NULL;
+	GList *list_up = mfx->uiapplication;
+	category_x *category = NULL;
+	GList *ct = NULL;
 	int ret = -1;
 	char *query = NULL;
-	while(up != NULL)
+	while(list_up != NULL)
 	{
+		up = (uiapplication_x *)list_up->data;
 		ct = up->category;
 		while (ct != NULL)
 		{
-			query = sqlite3_mprintf("insert into package_app_app_category(app_id, category) " \
-				"values(%Q, %Q)",\
-				 up->appid, ct->name);
-			ret = __exec_query(query);
-			sqlite3_free(query);
-			if (ret == -1) {
-				_LOGD("Package UiApp Category Info DB Insert Failed\n");
-				return -1;
+			category = (category_x*)ct->data;
+			if(category){
+				query = sqlite3_mprintf("insert into package_app_app_category(app_id, category) " \
+					"values(%Q, %Q)",\
+					 up->appid, category->name);
+				ret = __exec_query(query);
+				sqlite3_free(query);
+				if (ret == -1) {
+					_LOGD("Package UiApp Category Info DB Insert Failed\n");
+					return -1;
+				}
 			}
 			ct = ct->next;
 		}
-		up = up->next;
+		list_up = list_up->next;
 	}
+	return 0;
+}
+
+static int __insert_uiapplication_app_aliasid_info(const char* appid, const char* alisid)
+{
+	int ret = -1;
+	char *query = NULL;
+
+	query = sqlite3_mprintf("insert into package_app_aliasid(app_id, alias_id, type) values(%Q ,%Q, %d)",
+		appid,alisid,ALIAS_APPID_TYPE_APPDEFINED);
+	if(query == NULL) {
+		_LOGE("failed to mprintf query\n");
+		return -1;
+	}
+	ret = __exec_query(query);
+	sqlite3_free(query);
+	if (ret == -1) {
+		_LOGE("sqlite exec failed to insert aliasid(%s)!!\n", alisid);
+		return -1;
+	}
+
 	return 0;
 }
 
 static int __insert_uiapplication_appmetadata_info(manifest_x *mfx)
 {
-	uiapplication_x *up = mfx->uiapplication;
-	metadata_x *md = NULL;
+	uiapplication_x *up = NULL;
+	GList *list_up = mfx->uiapplication;
+	metadata_x *metadata = NULL;
+	GList *list_md = NULL;
 	int ret = -1;
 	char *query = NULL;
-	while(up != NULL)
+
+	while(list_up != NULL)
 	{
-		md = up->metadata;
-		while (md != NULL)
+		up = (uiapplication_x *)list_up->data;
+		list_md = up->metadata;
+		while (list_md != NULL)
 		{
-			if (md->key) {
+			metadata = (metadata_x *)list_md->data;
+			if (metadata && metadata->key){
 				query = sqlite3_mprintf("insert into package_app_app_metadata(app_id, md_key, md_value) " \
 					"values(%Q, %Q, %Q)",\
-					 up->appid, md->key, __get_str(md->value));
+					 up->appid, metadata->key, __get_str(metadata->value));
 				ret = __exec_query(query);
 				sqlite3_free(query);
 				if (ret == -1) {
@@ -984,36 +1150,42 @@ static int __insert_uiapplication_appmetadata_info(manifest_x *mfx)
 					return -1;
 				}
 			}
-			md = md->next;
+			list_md = list_md->next;
 		}
-		up = up->next;
+		list_up = list_up->next;
 	}
 	return 0;
 }
 
 static int __insert_uiapplication_apppermission_info(manifest_x *mfx)
 {
-	uiapplication_x *up = mfx->uiapplication;
-	permission_x *pm = NULL;
+	uiapplication_x *up = NULL;
+	GList *list_up = mfx->uiapplication;
+	permission_x *perm = NULL;
+	GList *list_pm = NULL;
 	int ret = -1;
 	char *query = NULL;
-	while(up != NULL)
+	while(list_up != NULL)
 	{
-		pm = up->permission;
-		while (pm != NULL)
+		up = (uiapplication_x *)list_up->data;
+		list_pm = up->permission;
+		while (list_pm != NULL)
 		{
-			query = sqlite3_mprintf("insert into package_app_app_permission(app_id, pm_type, pm_value) " \
-				"values(%Q, %Q, %Q)",\
-				 up->appid, pm->type, pm->value);
-			ret = __exec_query(query);
-			sqlite3_free(query);
-			if (ret == -1) {
-				_LOGD("Package UiApp permission Info DB Insert Failed\n");
-				return -1;
+			perm = (permission_x*)list_pm->data;
+			if(perm){
+				query = sqlite3_mprintf("insert into package_app_app_permission(app_id, pm_type, pm_value) " \
+					"values(%Q, %Q, %Q)",\
+					 up->appid, perm->type, perm->value);
+				ret = __exec_query(query);
+				sqlite3_free(query);
+				if (ret == -1) {
+					_LOGD("Package UiApp permission Info DB Insert Failed\n");
+					return -1;
+				}
 			}
-			pm = pm->next;
+			list_pm = list_pm->next;
 		}
-		up = up->next;
+		list_up = list_up->next;
 	}
 	return 0;
 }
@@ -1024,21 +1196,27 @@ static int __insert_uiapplication_appcontrol_info(manifest_x *mfx)
 	char *buf = NULL;
 	char *buftemp = NULL;
 	char *query = NULL;
-	uiapplication_x *up = mfx->uiapplication;
-
+	uiapplication_x *up = NULL;
+	GList *list_up = mfx->uiapplication;
 	buf = (char *)calloc(1, BUFMAX);
 	retvm_if(!buf, PMINFO_R_ERROR, "Malloc Failed\n");
 
 	buftemp = (char *)calloc(1, BUFMAX);
 	tryvm_if(!buftemp, ret = PMINFO_R_ERROR, "Malloc Failed\n");
 
-	for(; up; up=up->next) {
+	for(; list_up; list_up=list_up->next) {
+		up = (uiapplication_x *)list_up->data;
 		if (up->appsvc) {
 			appsvc_x *asvc = NULL;
+			GList *list_asvc = NULL;
 			operation_x *op = NULL;
+			GList *list_op = NULL;
 			mime_x *mi = NULL;
+			GList *list_mime = NULL;
 			uri_x *ui = NULL;
+			GList *list_uri = NULL;
 			subapp_x *sub = NULL;
+			GList *list_subapp = NULL;
 			const char *operation = NULL;
 			const char *mime = NULL;
 			const char *uri = NULL;
@@ -1047,28 +1225,38 @@ static int __insert_uiapplication_appcontrol_info(manifest_x *mfx)
 			memset(buf, '\0', BUFMAX);
 			memset(buftemp, '\0', BUFMAX);
 
-			asvc = up->appsvc;
-			while(asvc != NULL) {
-				op = asvc->operation;
-				while(op != NULL) {
-					if (op)
+			list_asvc = up->appsvc;
+			while(list_asvc != NULL) {
+				asvc = (appsvc_x *)list_asvc->data;
+				list_op= asvc->operation;
+				while(list_op != NULL) {
+					op = (operation_x *)list_op->data;
+					if (op && op->name)
 						operation = op->name;
-					mi = asvc->mime;
+					list_mime = asvc->mime;
 
-					do
-					{
-						if (mi)
-							mime = mi->name;
-						sub = asvc->subapp;
-						do
-						{
-							if (sub)
-								subapp = sub->name;
-							ui = asvc->uri;
-							do
-							{
-								if (ui)
-									uri = ui->name;
+					do{
+						if(list_mime){
+							mi = (mime_x *)list_mime->data;
+							if (mi && mi->name)
+								mime = mi->name;
+						}
+
+						list_subapp = asvc->subapp;
+						do{
+							if(list_subapp){
+								sub = (subapp_x *)list_subapp->data;
+								if (sub && sub->name)
+									subapp = sub->name;
+							}
+
+							list_uri = asvc->uri;
+							do{
+								if(list_uri){
+									ui = (uri_x *)list_uri->data;
+									if (ui && ui->name)
+										uri = ui->name;
+								}
 
 								if(i++ > 0) {
 									strncpy(buftemp, buf, BUFMAX);
@@ -1076,29 +1264,29 @@ static int __insert_uiapplication_appcontrol_info(manifest_x *mfx)
 								}
 
 								strncpy(buftemp, buf, BUFMAX);
-								snprintf(buf, BUFMAX, "%s%s|%s|%s|%s", buftemp, operation?operation:"NULL", uri?uri:"NULL", mime?mime:"NULL", subapp?subapp:"NULL");
+								snprintf(buf, BUFMAX, "%s%s|%s|%s|%s", buftemp, operation ? (strlen(operation) > 0 ? operation : "NULL") : "NULL", uri ? (strlen(uri) > 0 ? uri : "NULL") : "NULL", mime ? (strlen(mime) > 0 ? mime : "NULL") : "NULL", subapp ? (strlen(subapp) > 0 ? subapp : "NULL") : "NULL");
 //								_LOGD("buf[%s]\n", buf);
 
-								if (ui)
-									ui = ui->next;
+								if (list_uri)
+									list_uri = list_uri->next;
 								uri = NULL;
-							} while(ui != NULL);
-							if (sub)
-								sub = sub->next;
+							}while(list_uri != NULL);
+							if (list_subapp)
+								list_subapp = list_subapp->next;
 							subapp = NULL;
-						}while(sub != NULL);
-						if (mi)
-							mi = mi->next;
+						}while(list_subapp != NULL);
+						if (list_mime)
+							list_mime = list_mime->next;
 						mime = NULL;
-					}while(mi != NULL);
-					if (op)
-						op = op->next;
+					}while(list_mime != NULL);
+					if (list_op)
+						list_op = list_op->next;
 					operation = NULL;
 				}
-				asvc = asvc->next;
+				list_asvc = list_asvc->next;
 			}
 
-			query= sqlite3_mprintf("insert into package_app_app_control(app_id, app_control) values(%Q, %Q)", up->appid,  buf);
+			query= sqlite3_mprintf("insert into package_app_app_control(app_id, app_control) values(%Q, %Q)", up->appid, buf);
 			ret = __exec_query(query);
 			if (ret < 0) {
 				_LOGD("Package UiApp app_control DB Insert Failed\n");
@@ -1116,44 +1304,63 @@ catch:
 
 static int __insert_uiapplication_appsvc_info(manifest_x *mfx)
 {
-	uiapplication_x *up = mfx->uiapplication;
+	uiapplication_x *up = NULL;
+	GList *list_up = mfx->uiapplication;
 	appsvc_x *asvc = NULL;
+	GList *list_asvc = NULL;
 	operation_x *op = NULL;
+	GList *list_op = NULL;
 	mime_x *mi = NULL;
+	GList *list_mime = NULL;
 	uri_x *ui = NULL;
+	GList *list_uri = NULL;
 	subapp_x *sub = NULL;
+	GList *list_subapp = NULL;
 	int ret = -1;
 	char *query = NULL;
 	const char *operation = NULL;
 	const char *mime = NULL;
 	const char *uri = NULL;
 	const char *subapp = NULL;
-	while(up != NULL)
-	{
-		asvc = up->appsvc;
-		while(asvc != NULL)
-		{
-			op = asvc->operation;
-			while(op != NULL)
-			{
-				if (op)
-					operation = op->name;
-				mi = asvc->mime;
 
-				do
-				{
-					if (mi)
-						mime = mi->name;
-					sub = asvc->subapp;
-					do
-					{
-						if (sub)
-							subapp = sub->name;
-						ui = asvc->uri;
-						do
-						{
-							if (ui)
-								uri = ui->name;
+	while(list_up != NULL)
+	{
+		up = (uiapplication_x *)list_up->data;
+		list_asvc = up->appsvc;
+		while(list_asvc != NULL)
+		{
+			asvc = (appsvc_x *)list_asvc->data;
+			list_op = asvc->operation;
+			while(list_op!= NULL)
+			{
+				op = (operation_x *)list_op->data;
+				if(op && op->name)
+					operation = op->name;
+
+				list_mime = asvc->mime;
+				do{
+					if(list_mime){
+						mi = (mime_x *)list_mime->data;
+						if (mi)
+							mime = mi->name;
+					}
+
+					list_subapp = asvc->subapp;
+					do{
+						if(list_subapp){
+							sub = (subapp_x *)list_subapp->data;
+							if (sub)
+								subapp = sub->name;
+						}
+
+						list_uri= asvc->uri;
+						do{
+							if(list_uri){
+								ui = (uri_x *)list_uri->data;
+								if (ui && ui->name)
+									uri = ui->name;
+							}
+
 							query = sqlite3_mprintf("insert into package_app_app_svc(app_id, operation, uri_scheme, mime_type, subapp_name) " \
 								"values(%Q, %Q, %Q, %Q, %Q)",\
 								 up->appid,
@@ -1168,89 +1375,109 @@ static int __insert_uiapplication_appsvc_info(manifest_x *mfx)
 								_LOGD("Package UiApp AppSvc DB Insert Failed\n");
 								return -1;
 							}
-							if (ui)
-								ui = ui->next;
+							if (list_uri)
+								list_uri = list_uri->next;
 							uri = NULL;
-						} while(ui != NULL);
-						if (sub)
-							sub = sub->next;
+						}while(list_uri != NULL);
+						if (list_subapp)
+							list_subapp = list_subapp->next;
 						subapp = NULL;
-					}while(sub != NULL);
-					if (mi)
-						mi = mi->next;
+					}while(list_subapp != NULL);
+					if (list_mime)
+						list_mime = list_mime->next;
 					mime = NULL;
-				}while(mi != NULL);
-				if (op)
-					op = op->next;
+				}while(list_mime != NULL);
+				if (list_op)
+					list_op = list_op->next;
 				operation = NULL;
 			}
-			asvc = asvc->next;
+			list_asvc = list_asvc->next;
 		}
-		up = up->next;
+		list_up = list_up->next;
 	}
 	return 0;
 }
 
 static int __insert_uiapplication_share_request_info(manifest_x *mfx)
 {
-	uiapplication_x *up = mfx->uiapplication;
-	datashare_x *ds = NULL;
-	request_x *rq = NULL;
+	uiapplication_x *up = NULL;
+	GList *list_up = mfx->uiapplication;
+	GList *ds = NULL;
+	datashare_x *datashare = NULL;
+	GList *rq = NULL;
+	request_x *req = NULL;
 	int ret = -1;
 	char *query = NULL;
-	while(up != NULL)
+
+	while(list_up != NULL)
 	{
+		up = (uiapplication_x *)list_up->data;
 		ds = up->datashare;
 		while(ds != NULL)
 		{
-			rq = ds->request;
+			datashare = (datashare_x*)ds->data;
+			rq = datashare->request;
 			while(rq != NULL)
 			{
-				query = sqlite3_mprintf("insert into package_app_share_request(app_id, data_share_request) " \
-					"values(%Q, %Q)",\
-					 up->appid, rq->text);
-				ret = __exec_query(query);
-				sqlite3_free(query);
-				if (ret == -1) {
-					_LOGD("Package UiApp Share Request DB Insert Failed\n");
-					return -1;
+				req = (request_x*)rq->data;
+				if(req){
+					query = sqlite3_mprintf("insert into package_app_share_request(app_id, data_share_request) " \
+						"values(%Q, %Q)",\
+						 up->appid, req->text);
+					ret = __exec_query(query);
+					sqlite3_free(query);
+					if (ret == -1) {
+						_LOGD("Package UiApp Share Request DB Insert Failed\n");
+						return -1;
+					}
 				}
 				rq = rq->next;
 			}
 			ds = ds->next;
 		}
-		up = up->next;
+		list_up = list_up->next;
 	}
 	return 0;
 }
 
 static int __insert_uiapplication_share_allowed_info(manifest_x *mfx)
 {
-	uiapplication_x *up = mfx->uiapplication;
-	datashare_x *ds = NULL;
-	define_x *df = NULL;
-	allowed_x *al = NULL;
+	uiapplication_x *up = NULL;
+	GList *list_up = mfx->uiapplication;
+	GList *ds = NULL;
+	datashare_x* datashare = NULL;
+	GList *df = NULL;
+	define_x* def = NULL;
+	GList *al = NULL;
+	allowed_x *alw = NULL;
 	int ret = -1;
 	char *query = NULL;
-	while(up != NULL)
+
+	while(list_up != NULL)
 	{
+		up = (uiapplication_x *)list_up->data;
 		ds = up->datashare;
 		while(ds != NULL)
 		{
-			df = ds->define;
+			datashare = (datashare_x*)ds->data;
+			df = datashare->define;
 			while(df != NULL)
 			{
-				al = df->allowed;
+				def = (define_x*)df->data;
+				al = def->allowed;
 				while(al != NULL)
 				{
-					query = sqlite3_mprintf("insert into package_app_share_allowed(app_id, data_share_path, data_share_allowed) " \
-						"values(%Q, %Q, %Q)",\
-						 up->appid, df->path, al->text);
-					ret = __exec_query(query);
-					sqlite3_free(query);
-					if (ret == -1) {
-						_LOGD("Package UiApp Share Allowed DB Insert Failed\n");
-						return -1;
+					alw = (allowed_x*)al->data;
+					if(alw){
+						query = sqlite3_mprintf("insert into package_app_share_allowed(app_id, data_share_path, data_share_allowed) " \
+							"values(%Q, %Q, %Q)",\
+							 up->appid, def->path, alw->text);
+						ret = __exec_query(query);
+						sqlite3_free(query);
+						if (ret == -1) {
+							_LOGD("Package UiApp Share Allowed DB Insert Failed\n");
+							return -1;
+						}
 					}
 					al = al->next;
 				}
@@ -1258,28 +1485,30 @@ static int __insert_uiapplication_share_allowed_info(manifest_x *mfx)
 			}
 			ds = ds->next;
 		}
-		up = up->next;
+		list_up = list_up->next;
 	}
 	return 0;
 }
 
 static int __insert_manifest_info_in_db(manifest_x *mfx)
 {
-	label_x *lbl = mfx->label;
-	license_x *lcn = mfx->license;
-	icon_x *icn = mfx->icon;
-	description_x *dcn = mfx->description;
-	author_x *ath = mfx->author;
-	uiapplication_x *up = mfx->uiapplication;
-	uiapplication_x *up_icn = mfx->uiapplication;
-	uiapplication_x *up_image = mfx->uiapplication;
-	privileges_x *pvs = NULL;
-	privilege_x *pv = NULL;
+	GList *lbl = mfx->label;
+	GList *lcn = mfx->license;
+	GList *icn = mfx->icon;
+	GList *dcn = mfx->description;
+	GList *ath = mfx->author;
+	uiapplication_x *up = NULL;
+	uiapplication_x *up_icn = NULL;
+	uiapplication_x *up_image = NULL;
+	uiapplication_x *up_support_mode = NULL;
+	GList *list_up = NULL;
+	int temp_pkg_mode = 0;
+	int temp_app_mode = 0;
+	char pkg_mode[10] = {'\0'};
+	GList *pvs = NULL;
+	char *pv = NULL;
 	char *query = NULL;
-	char root[MAX_QUERY_LEN] = { '\0' };
 	int ret = -1;
-	char *type = NULL;
-	char *path = NULL;
 	const char *auth_name = NULL;
 	const char *auth_email = NULL;
 	const char *auth_href = NULL;
@@ -1290,101 +1519,108 @@ static int __insert_manifest_info_in_db(manifest_x *mfx)
 	GList *appimage = NULL;
 
 	if (ath) {
-		if (ath->text)
-			auth_name = ath->text;
-		if (ath->email)
-			auth_email = ath->email;
-		if (ath->href)
-			auth_href = ath->href;
-	}
-
-	/*Insert in the package_info DB*/
-	if (mfx->type)
-		type = strdup(mfx->type);
-	else
-		type = strdup("rpm");
-	/*Insert in the package_info DB*/
-	if (mfx->root_path) {
-		path = strdup(mfx->root_path);
-	} else {
-		if (type && strcmp(type,"rpm")==0) {
-			snprintf(root, MAX_QUERY_LEN - 1, "/opt/share/packages/%s.xml", mfx->package);
-			if (access(root, F_OK) == 0) {
-				memset(root, '\0', MAX_QUERY_LEN);
-				snprintf(root, MAX_QUERY_LEN - 1, "/opt/usr/apps/%s", mfx->package);
-			} else {
-				memset(root, '\0', MAX_QUERY_LEN);
-				snprintf(root, MAX_QUERY_LEN - 1, "/usr/apps/%s", mfx->package);
-			}
-		} else {
-			snprintf(root, MAX_QUERY_LEN - 1, "/opt/usr/apps/%s", mfx->package);
+		author_x* auth = (author_x*)ath->data;
+		if(auth){
+			if (auth->text)
+				auth_name = auth->text;
+			if (auth->email)
+				auth_email = auth->email;
+			if (auth->href)
+				auth_href = auth->href;
 		}
-
-		path = strdup(root);
 	}
 
-	query = sqlite3_mprintf("insert into package_info(package, package_type, package_version, install_location, package_size, " \
+	// support-mode ORing
+	if (mfx->support_mode) {
+		temp_pkg_mode = atoi(mfx->support_mode);
+	}
+	list_up = mfx->uiapplication;
+	while (list_up != NULL) {
+		up_support_mode = (uiapplication_x *)list_up->data;
+		if (up_support_mode->support_mode) {
+			temp_app_mode = atoi(up_support_mode->support_mode);
+			temp_pkg_mode |= temp_app_mode;
+		}
+		list_up = list_up->next;
+	}
+	snprintf(pkg_mode, sizeof(pkg_mode), "%d", temp_pkg_mode);
+
+	if(mfx->support_mode)
+		free((void *)mfx->support_mode);
+	mfx->support_mode = strdup(pkg_mode);
+
+	/*Insert in the package_info DB*/
+	char *backend = NULL;
+	if (mfx->type)
+		backend = strdup(mfx->type);
+	else
+		backend = strdup("rpm");
+
+	if (backend == NULL) {
+		_LOGE("Out of memory");
+		return -1;
+	}
+
+	if (!mfx->backend_installer)
+		mfx->backend_installer = strdup(backend);
+
+	FREE_AND_NULL(backend);
+
+	query = sqlite3_mprintf("insert into package_info(package, package_type, package_version, package_api_version, install_location, package_size, " \
 		"package_removable, package_preload, package_readonly, package_update, package_appsetting, package_nodisplay, package_system," \
 		"author_name, author_email, author_href, installed_time, installed_storage, storeclient_id, mainapp_id, package_url, root_path, csc_path, package_support_disable, " \
-		"package_mother_package, package_support_mode, package_reserve1, package_reserve2, package_hash) " \
+		"package_mother_package, package_support_mode, package_backend_installer, package_custom_smack_label) " \
 		"values(%Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q)",\
-		 mfx->package,
-		 type,
-		 mfx->version,
-		 __get_str(mfx->installlocation),
-		 __get_str(mfx->package_size),
-		 mfx->removable,
-		 mfx->preload,
-		 mfx->readonly,
-		 mfx->update,
-		 mfx->appsetting,
-		 mfx->nodisplay_setting,
-		 mfx->system,
-		 __get_str(auth_name),
-		 __get_str(auth_email),
-		 __get_str(auth_href),
-		 mfx->installed_time,
-		 mfx->installed_storage,
-		 __get_str(mfx->storeclient_id),
-		 mfx->mainapp_id,
-		 __get_str(mfx->package_url),
-		 path,
-		 __get_str(mfx->csc_path),
-		 mfx->support_disable,
-		 mfx->mother_package,
-		 mfx->support_mode,
-		 __get_str(mfx->support_reset),
-		 mfx->use_reset,
-		 mfx->hash
-		 );
+		mfx->package,
+		mfx->type,
+		mfx->version,
+		__get_str(mfx->api_version),
+		__get_str(mfx->installlocation),
+		__get_str(mfx->package_size),
+		mfx->removable,
+		mfx->preload,
+		mfx->readonly,
+		mfx->update,
+		mfx->appsetting,
+		mfx->nodisplay_setting,
+		mfx->system,
+		__get_str(auth_name),
+		__get_str(auth_email),
+		__get_str(auth_href),
+		mfx->installed_time,
+		mfx->installed_storage,
+		__get_str(mfx->storeclient_id),
+		mfx->mainapp_id,
+		__get_str(mfx->package_url),
+		mfx->root_path,
+		__get_str(mfx->csc_path),
+		mfx->support_disable,
+		mfx->mother_package,
+		mfx->support_mode,
+		mfx->backend_installer,
+		mfx->custom_smack_label);
 
 	ret = __exec_query(query);
 	sqlite3_free(query);
 	if (ret == -1) {
 		_LOGD("Package Info DB Insert Failed\n");
-		FREE_AND_NULL(type);
-		FREE_AND_NULL(path);
 		return -1;
 	}
-
-	FREE_AND_NULL(type);
-	FREE_AND_NULL(path);
 
 	/*Insert in the package_privilege_info DB*/
 	pvs = mfx->privileges;
 	while (pvs != NULL) {
-		pv = pvs->privilege;
-		while (pv != NULL) {
+		pv = (char*)pvs->data;
+		if (pv != NULL) {
 			query = sqlite3_mprintf("insert into package_privilege_info(package, privilege) " \
 				"values(%Q, %Q)",\
-				 mfx->package, pv->text);
+				 mfx->package, pv);
 			ret = __exec_query(query);
 			sqlite3_free(query);
 			if (ret == -1) {
 				_LOGD("Package Privilege Info DB Insert Failed\n");
 				return -1;
 			}
-			pv = pv->next;
 		}
 		pvs = pvs->next;
 	}
@@ -1399,28 +1635,35 @@ static int __insert_manifest_info_in_db(manifest_x *mfx)
 	__trimfunc(pkglocale);
 
 	/*Insert the app locale info */
-	while(up != NULL)
+	list_up = mfx->uiapplication;
+	while(list_up != NULL)
 	{
+		up = (uiapplication_x *)list_up->data;
 		applocale = __create_locale_list(applocale, up->label, NULL, up->icon, NULL, NULL);
-		up = up->next;
+		list_up = list_up->next;
 	}
+
 	/*remove duplicated data in applocale*/
 	__trimfunc(applocale);
 
 	/*Insert the app icon info */
-	while(up_icn != NULL)
+	list_up = mfx->uiapplication;
+	while(list_up != NULL)
 	{
+		up_icn = (uiapplication_x *)list_up->data;
 		appicon = __create_icon_list(appicon, up_icn->icon);
-		up_icn = up_icn->next;
+		list_up = list_up->next;
 	}
 	/*remove duplicated data in appicon*/
 	__trimfunc(appicon);
 
 	/*Insert the image info */
-	while(up_image != NULL)
+	list_up = mfx->uiapplication;
+	while(list_up != NULL)
 	{
+		up_image = (uiapplication_x *)list_up->data;
 		appimage = __create_image_list(appimage, up_image->image);
-		up_image = up_image->next;
+		list_up = list_up->next;
 	}
 	/*remove duplicated data in appimage*/
 	__trimfunc(appimage);
@@ -1432,27 +1675,30 @@ static int __insert_manifest_info_in_db(manifest_x *mfx)
 	g_list_foreach(pkglocale, __insert_pkglocale_info, (gpointer)mfx);
 
 	/*native app locale info*/
-	up = mfx->uiapplication;
-	while(up != NULL)
-	{
-		g_list_foreach(applocale, __insert_uiapplication_locale_info, (gpointer)up);
-		up = up->next;
-	}
+		list_up = mfx->uiapplication;
+		while(list_up != NULL)
+		{
+			up = (uiapplication_x *)list_up->data;
+			g_list_foreach(applocale, __insert_uiapplication_locale_info, (gpointer)up);
+			list_up = list_up->next;
+		}
 
 	/*app icon locale info*/
-	up_icn = mfx->uiapplication;
-	while(up_icn != NULL)
+	list_up = mfx->uiapplication;
+	while(list_up != NULL)
 	{
+		up_icn = (uiapplication_x *)list_up->data;
 		g_list_foreach(appicon, __insert_uiapplication_icon_section_info, (gpointer)up_icn);
-		up_icn = up_icn->next;
+		list_up = list_up->next;
 	}
 
 	/*app image info*/
-	up_image = mfx->uiapplication;
-	while(up_image != NULL)
+	list_up = mfx->uiapplication;
+	while(list_up != NULL)
 	{
+		up_image = (uiapplication_x *)list_up->data;
 		g_list_foreach(appimage, __insert_uiapplication_image_info, (gpointer)up_image);
-		up_image = up_image->next;
+		list_up = list_up->next;
 	}
 
 	g_list_free(pkglocale);
@@ -1463,7 +1709,6 @@ static int __insert_manifest_info_in_db(manifest_x *mfx)
 	appicon = NULL;
 	g_list_free(appimage);
 	appimage = NULL;
-
 
 	/*Insert in the package_app_info DB*/
 	ret = __insert_uiapplication_info(mfx);
@@ -1511,7 +1756,23 @@ static int __insert_manifest_info_in_db(manifest_x *mfx)
 		return -1;
 
 	return 0;
+}
 
+static int __update_app_info_for_bg_disable(const char *appid, bool disable)
+{
+	char *query = NULL;
+	int ret = -1;
+
+	/*Update from package info*/
+	if (disable)
+		query = sqlite3_mprintf("update package_app_info set app_background_category = app_background_category & ~1 where app_id=%Q", appid);
+	else
+		query = sqlite3_mprintf("update package_app_info set app_background_category = app_background_category | 1 where app_id=%Q", appid);
+	ret = __exec_query(query);
+	sqlite3_free(query);
+	retvm_if(ret < 0, PMINFO_R_ERROR, "__exec_query() failed.\n");
+
+	return PMINFO_R_OK;
 }
 
 static int __update_pkg_info_for_disable(const char *pkgid, bool disable)
@@ -1548,23 +1809,63 @@ static int __delete_appinfo_from_db(char *db_table, const char *appid)
 	return ret;
 }
 
+static int __get_appid_list_cb(void *data, int ncols, char **coltxt, char **colname)
+{
+	if (ncols != 1) {
+		_LOGE("invalid parameter!");
+		return -1;
+	}
+	GList **tmp_list = (GList **)data;
+
+	if (strlen(*coltxt) == 0 || strcmp(*colname, "app_id") != 0) {
+		_LOGE("wrong return value, colname[%s], coltxt[%s]", *colname, *coltxt);
+		return -1;
+	}
+
+	*tmp_list = g_list_append(*tmp_list, strdup(*coltxt));
+	return 0;
+}
+
+static void appid_list_free(gpointer data)
+{
+	FREE_AND_NULL(data);
+}
+
 static int __delete_manifest_info_from_db(manifest_x *mfx)
 {
 	int ret = -1;
-	uiapplication_x *up = mfx->uiapplication;
+	GList *list_up = NULL;
+	GList *tmp_list = NULL;
+	char *query = sqlite3_mprintf("select app_id from package_app_info where package=%Q", mfx->package);
 
 	/* Delete package info DB */
 	ret = __delete_manifest_info_from_pkgid(mfx->package);
-	retvm_if(ret < 0, PMINFO_R_ERROR, "Package Info DB Delete Failed\n");
-
-	while (up != NULL) {
-		ret = __delete_manifest_info_from_appid(up->appid);
-		retvm_if(ret < 0, PMINFO_R_ERROR, "App Info DB Delete Failed\n");
-
-		up = up->next;
+	if (ret < 0) {
+		_LOGE("Package Info DB Delete Failed\n");
+		goto catch;
 	}
 
-	return 0;
+	/* Search package_app_info DB and get app_id list related with given package */
+	ret = __exec_db_query(pkgmgr_parser_db, query, __get_appid_list_cb, &list_up);
+	if (ret < 0) {
+		_LOGE("failed to exec query");
+		goto catch;
+	}
+	tmp_list = list_up;
+	while (tmp_list != NULL) {
+		ret = __delete_manifest_info_from_appid((char *)tmp_list->data);
+		retvm_if(ret < 0, PMINFO_R_ERROR, "App Info DB Delete Failed\n");
+
+		tmp_list = tmp_list->next;
+	}
+
+catch:
+
+	if (query)
+		sqlite3_free(query);
+
+	g_list_free_full(list_up, (GDestroyNotify)appid_list_free);
+	return ret;
 }
 
 static int __delete_appsvc_db(const char *appid)
@@ -1574,11 +1875,10 @@ static int __delete_appsvc_db(const char *appid)
 	int (*appsvc_operation) (const char *);
 
 	if ((lib_handle = dlopen(LIBAPPSVC_PATH, RTLD_LAZY)) == NULL) {
-		_LOGE("dlopen is failed LIBAIL_PATH[%s]\n", LIBAPPSVC_PATH);
+		_LOGE("dlopen is failed LIBAPPSVC_PATH[%s]\n", LIBAPPSVC_PATH);
 		return ret;
 	}
-	if ((appsvc_operation =
-		 dlsym(lib_handle, "appsvc_unset_defapp")) == NULL || dlerror() != NULL) {
+	if ((appsvc_operation = dlsym(lib_handle, "appsvc_unset_defapp")) == NULL || dlerror() != NULL) {
 		_LOGE("can not find symbol \n");
 		goto END;
 	}
@@ -1595,9 +1895,11 @@ END:
 static int __delete_appsvc_info_from_db(manifest_x *mfx)
 {
 	int ret = 0;
-	uiapplication_x *uiapplication = mfx->uiapplication;
+	uiapplication_x *uiapplication = NULL;
+	GList *list_up = mfx->uiapplication;
 
-	for(; uiapplication; uiapplication=uiapplication->next) {
+	for(; list_up; list_up=list_up->next) {
+		uiapplication = (uiapplication_x *)list_up->data;
 		ret = __delete_appsvc_db(uiapplication->appid);
 		if (ret <0)
 			_LOGE("can not remove_appsvc_db\n");
@@ -1637,6 +1939,25 @@ catch:
 	return 0;
 }
 
+static int __delete_alias_appid_manifest_info_from_appid(const char *appid)
+{
+	int ret = PM_PARSER_R_OK;
+	char *query = NULL;
+
+	query = sqlite3_mprintf("delete from package_app_aliasid where app_id = %Q and type = %d",
+		appid, ALIAS_APPID_TYPE_APPDEFINED);
+	if(query == NULL) {
+		_LOGE("failed to mprintf query\n");
+		return PM_PARSER_R_ERROR;
+	}
+
+	ret = __exec_query(query);
+	tryvm_if(ret != SQLITE_OK,ret = PM_PARSER_R_ERROR,"Package alias appid delete failed!!");
+
+catch:
+	if(query) sqlite3_free(query);
+	return ret;
+}
 
 static  int __delete_manifest_info_from_appid(const char *appid)
 {
@@ -1678,6 +1999,9 @@ static  int __delete_manifest_info_from_appid(const char *appid)
 	ret = __delete_appinfo_from_db("package_app_data_control", appid);
 	retvm_if(ret < 0, PMINFO_R_ERROR, "Fail to get handle");
 
+	ret = __delete_alias_appid_manifest_info_from_appid(appid);
+	retvm_if(ret < 0, PMINFO_R_ERROR, "Fail to get handle");
+
 	return 0;
 }
 
@@ -1693,6 +2017,12 @@ static int __update_preload_condition_in_db()
 	sqlite3_free(query);
 	if (ret == -1)
 		_LOGD("Package preload_condition update failed\n");
+
+	query = sqlite3_mprintf("PRAGMA user_version=%d", PKGMGR_PARSER_DB_VERSION);
+	ret = __exec_query(query);
+	sqlite3_free(query);
+	if (ret == -1)
+		_LOGD("Package user_version update failed\n");
 
 	return ret;
 }
@@ -1809,33 +2139,60 @@ int pkgmgr_parser_initialize_db()
 		_LOGD("package app aliasId DB initialization failed\n");
 		return ret;
 	}
-#ifdef _APPFW_FEATURE_PROFILE_WEARABLE
-	ret = __init_tables_for_wearable();
-	if (ret == -1) {
-		_LOGD("package pkg reserve info DB initialization failed\n");
-		return ret;
-	}
-#endif
 
 	return 0;
 }
 
-int pkgmgr_parser_check_and_create_db()
+int zone_pkgmgr_parser_check_and_create_db(const char *zone)
 {
 	int ret = -1;
 	/*Manifest DB*/
-	ret = __pkgmgr_parser_create_db(&pkgmgr_parser_db, PKGMGR_PARSER_DB_FILE);
+	char db_path[PKG_STRING_LEN_MAX] = { '\0', };
+	char *rootpath = NULL;
+
+
+	if (zone == NULL || strcmp(zone, ZONE_HOST) == 0) {
+		snprintf(db_path, PKG_STRING_LEN_MAX, "%s", PKGMGR_PARSER_DB_FILE);
+	} else {
+		rootpath = __zone_get_root_path(zone);
+		if (rootpath == NULL) {
+			_LOGE("Failed to get rootpath");
+			return -1;
+		}
+
+		snprintf(db_path, PKG_STRING_LEN_MAX, "%s%s", rootpath, PKGMGR_PARSER_DB_FILE);
+	}
+
+	_LOGD("db path(%s)", db_path);
+	ret = __pkgmgr_parser_create_db(&pkgmgr_parser_db, db_path);
+
 	if (ret) {
 		_LOGD("Manifest DB creation Failed\n");
 		return -1;
 	}
 	/*Cert DB*/
-	ret = __pkgmgr_parser_create_db(&pkgmgr_cert_db, PKGMGR_CERT_DB_FILE);
+	memset(db_path, '\0', PKG_STRING_LEN_MAX);
+
+	if (zone == NULL || strcmp(zone, ZONE_HOST) == 0) {
+		snprintf(db_path, PKG_STRING_LEN_MAX, "%s", PKGMGR_CERT_DB_FILE);
+	} else {
+		_LOGD("rootpath : %s", rootpath);
+		snprintf(db_path, PKG_STRING_LEN_MAX, "%s%s", rootpath, PKGMGR_CERT_DB_FILE);
+	}
+
+	_LOGD("db path(%s)", db_path);
+	ret = __pkgmgr_parser_create_db(&pkgmgr_cert_db, db_path);
+
 	if (ret) {
 		_LOGD("Cert DB creation Failed\n");
 		return -1;
 	}
 	return 0;
+}
+
+int pkgmgr_parser_check_and_create_db()
+{
+	return zone_pkgmgr_parser_check_and_create_db(NULL);
 }
 
 void pkgmgr_parser_close_db()
@@ -1859,11 +2216,13 @@ API int pkgmgr_parser_insert_manifest_info_in_db(manifest_x *mfx)
 	ret = pkgmgr_parser_initialize_db();
 	if (ret == -1)
 		goto err;
+
+	// pkgmgr parser DB transaction
 	/*Begin transaction*/
 	ret = sqlite3_exec(pkgmgr_parser_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
 		_LOGD("Failed to begin transaction[%d]\n", ret);
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 	_LOGD("Transaction Begin\n");
@@ -1872,9 +2231,9 @@ API int pkgmgr_parser_insert_manifest_info_in_db(manifest_x *mfx)
 		_LOGD("Insert into DB failed. Rollback now\n");
 		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
 		if (ret != SQLITE_OK)
-			_LOGD("ROLLBACK is fail after insert_disabled_pkg_info_in_db\n");
+			_LOGD("ROLLBACK is fail after insert_pkg_info_in_db\n");
 
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 	/*Commit transaction*/
@@ -1885,7 +2244,7 @@ API int pkgmgr_parser_insert_manifest_info_in_db(manifest_x *mfx)
 		if (ret != SQLITE_OK)
 		_LOGE("Failed to commit transaction. Rollback now\n");
 
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 	_LOGD("Transaction Commit and End\n");
@@ -1910,11 +2269,12 @@ API int pkgmgr_parser_update_manifest_info_in_db(manifest_x *mfx)
 	if (ret == -1)
 		goto err;
 
+	// pkgmgr parser DB transaction
 	/*Begin transaction*/
 	ret = sqlite3_exec(pkgmgr_parser_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
 		_LOGD("Failed to begin transaction\n");
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 	_LOGD("Transaction Begin\n");
@@ -1923,7 +2283,9 @@ API int pkgmgr_parser_update_manifest_info_in_db(manifest_x *mfx)
 		_LOGD("Delete from DB failed. Rollback now\n");
 		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
 		if (ret != SQLITE_OK)
-			_LOGD("Failed to commit transaction. Rollback now\n");
+			_LOGE("Failed to rollback transaction.\n");
+
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 	ret = __insert_manifest_info_in_db(mfx);
@@ -1931,7 +2293,9 @@ API int pkgmgr_parser_update_manifest_info_in_db(manifest_x *mfx)
 		_LOGD("Insert into DB failed. Rollback now\n");
 		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
 		if (ret != SQLITE_OK)
-			_LOGD("Failed to commit transaction. Rollback now\n");
+			_LOGE("Failed to rollback transaction\n");
+
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -1943,7 +2307,7 @@ API int pkgmgr_parser_update_manifest_info_in_db(manifest_x *mfx)
 		if (ret != SQLITE_OK)
 			_LOGD("Failed to commit transaction. Rollback now\n");
 
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 	_LOGD("Transaction Commit and End\n");
@@ -1964,11 +2328,12 @@ API int pkgmgr_parser_delete_manifest_info_from_db(manifest_x *mfx)
 		_LOGD("Failed to open DB\n");
 		return ret;
 	}
+	// pkgmgr parser DB transaction
 	/*Begin transaction*/
 	ret = sqlite3_exec(pkgmgr_parser_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
 		_LOGD("Failed to begin transaction\n");
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 	_LOGD("Transaction Begin\n");
@@ -1977,10 +2342,12 @@ API int pkgmgr_parser_delete_manifest_info_from_db(manifest_x *mfx)
 		_LOGD("Delete from DB failed. Rollback now\n");
 		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
 		if (ret != SQLITE_OK)
-			_LOGE("Failed to commit transaction, Rollback now\n");
+			_LOGE("Failed to rollback transaction \n");
 
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
+
 	/*Commit transaction*/
 	ret = sqlite3_exec(pkgmgr_parser_db, "COMMIT", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
@@ -1989,7 +2356,7 @@ API int pkgmgr_parser_delete_manifest_info_from_db(manifest_x *mfx)
 		if (ret != SQLITE_OK)
 			_LOGE("Failed to commit transaction, Rollback now\n");
 
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -2017,7 +2384,7 @@ API int pkgmgr_parser_update_preload_info_in_db()
 	ret = sqlite3_exec(pkgmgr_parser_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
 		_LOGD("Failed to begin transaction\n");
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 	_LOGD("Transaction Begin\n");
@@ -2026,8 +2393,9 @@ API int pkgmgr_parser_update_preload_info_in_db()
 		_LOGD("__update_preload_condition_in_db failed. Rollback now\n");
 		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
 		if (ret != SQLITE_OK)
-			_LOGE("Failed to commit transaction, Rollback now\n");
+			_LOGE("Failed to ROLLBACK for update preload condition.");
 
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 	/*Commit transaction*/
@@ -2036,9 +2404,9 @@ API int pkgmgr_parser_update_preload_info_in_db()
 		_LOGD("Failed to commit transaction, Rollback now\n");
 		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
 		if (ret != SQLITE_OK)
-			_LOGE("Failed to commit transaction, Rollback now\n");
+			_LOGE("Failed to ROLLBACK for COMMIT.");
 
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 	_LOGD("Transaction Commit and End\n");
@@ -2061,7 +2429,7 @@ API int pkgmgr_parser_delete_pkgid_info_from_db(const char *pkgid)
 	ret = sqlite3_exec(pkgmgr_parser_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
 		_LOGE("Failed to begin transaction\n");
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -2074,9 +2442,11 @@ API int pkgmgr_parser_delete_pkgid_info_from_db(const char *pkgid)
 		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
 		if (ret != SQLITE_OK)
 			_LOGE("Failed to begin transaction\n");
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
+	// pkgmgr parser DB transaction
 	/*Commit transaction*/
 	ret = sqlite3_exec(pkgmgr_parser_db, "COMMIT", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
@@ -2085,7 +2455,7 @@ API int pkgmgr_parser_delete_pkgid_info_from_db(const char *pkgid)
 		if (ret != SQLITE_OK)
 			_LOGE("Failed to commit transaction, Rollback now\n");
 
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -2104,11 +2474,12 @@ API int pkgmgr_parser_delete_appid_info_from_db(const char *appid)
 	ret = pkgmgr_parser_check_and_create_db();
 	retvm_if(ret < 0, PMINFO_R_ERROR, "Failed to open DB\n");
 
+	// pkgmgr parser DB transaction
 	/*Begin transaction*/
 	ret = sqlite3_exec(pkgmgr_parser_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
 		_LOGE("Failed to begin transaction\n");
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -2132,7 +2503,7 @@ API int pkgmgr_parser_delete_appid_info_from_db(const char *appid)
 		if (ret != SQLITE_OK)
 			_LOGE("Failed to commit transaction, Rollback now\n");
 
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -2141,7 +2512,7 @@ err:
 	return ret;
 }
 
-API int pkgmgr_parser_update_enabled_pkg_info_in_db(const char *pkgid)
+int zone_pkgmgr_parser_update_enabled_pkg_info_in_db(const char *pkgid, const char *zone)
 {
 	retvm_if(pkgid == NULL, PMINFO_R_ERROR, "pkgid is NULL.");
 
@@ -2150,14 +2521,15 @@ API int pkgmgr_parser_update_enabled_pkg_info_in_db(const char *pkgid)
 	_LOGD("pkgmgr_parser_update_enabled_pkg_info_in_db(%s)\n", pkgid);
 
 	/*open db*/
-	ret = pkgmgr_parser_check_and_create_db();
+	ret = zone_pkgmgr_parser_check_and_create_db(zone);
 	retvm_if(ret < 0, PMINFO_R_ERROR, "pkgmgr_parser_check_and_create_db(%s) failed.\n", pkgid);
 
+	// pkgmgr changeable DB transaction
 	/*Begin transaction*/
 	ret = sqlite3_exec(pkgmgr_parser_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
 		_LOGE("sqlite3_exec(BEGIN EXCLUSIVE) failed.\n");
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -2168,6 +2540,8 @@ API int pkgmgr_parser_update_enabled_pkg_info_in_db(const char *pkgid)
 		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
 		if (ret != SQLITE_OK)
 			_LOGE("sqlite3_exec(ROLLBACK) failed.\n");
+
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -2179,7 +2553,7 @@ API int pkgmgr_parser_update_enabled_pkg_info_in_db(const char *pkgid)
 		if (ret != SQLITE_OK)
 			_LOGE("sqlite3_exec(ROLLBACK) failed.\n");
 
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -2188,7 +2562,60 @@ err:
 	return ret;
 }
 
-API int pkgmgr_parser_update_disabled_pkg_info_in_db(const char *pkgid)
+API int pkgmgr_parser_update_enabled_pkg_info_in_db(const char *pkgid)
+{
+	return zone_pkgmgr_parser_update_enabled_pkg_info_in_db(pkgid, NULL);
+}
+
+int zone_pkgmgr_parser_update_app_disable_bg_operation_info_in_db(const char *appid, const char *zone, bool is_disable)
+{
+	retvm_if(appid == NULL, PMINFO_R_ERROR, "appid is NULL.");
+
+	int ret = -1;
+	_LOGD("zone_pkgmgr_parser_update_app_disable_bg_operation_info_in_db[%s]\n", appid);
+
+	/*open db*/
+	ret = zone_pkgmgr_parser_check_and_create_db(zone);
+	retvm_if(ret < 0, PMINFO_R_ERROR, "pkgmgr_parser_check_and_create_db(%s) failed.\n", appid);
+
+	/*Begin transaction*/
+	ret = sqlite3_exec(pkgmgr_parser_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
+	if (ret != SQLITE_OK) {
+		_LOGE("sqlite3_exec(BEGIN EXCLUSIVE) failed.\n");
+		ret = PM_PARSER_R_ERROR;
+		goto err;
+	}
+
+	/*update app info*/
+	ret = __update_app_info_for_bg_disable(appid, is_disable);
+	if (ret == -1) {
+		_LOGE("update_app_info_for_bg_disable[%s] failed.\n", appid);
+		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
+		if (ret != SQLITE_OK)
+			_LOGE("sqlite3_exec(ROLLBACK) failed.\n");
+
+		ret = PM_PARSER_R_ERROR;
+		goto err;
+	}
+
+	/*Commit transaction*/
+	ret = sqlite3_exec(pkgmgr_parser_db, "COMMIT", NULL, NULL, NULL);
+	if (ret != SQLITE_OK) {
+		_LOGD("sqlite3_exec(COMMIT) failed.\n");
+		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
+		if (ret != SQLITE_OK)
+			_LOGE("sqlite3_exec(ROLLBACK) failed.\n");
+
+		ret = PM_PARSER_R_ERROR;
+		goto err;
+	}
+
+err:
+	pkgmgr_parser_close_db();
+	return ret;
+}
+
+int zone_pkgmgr_parser_update_disabled_pkg_info_in_db(const char *pkgid, const char *zone)
 {
 	retvm_if(pkgid == NULL, PMINFO_R_ERROR, "pkgid is NULL.");
 
@@ -2197,14 +2624,15 @@ API int pkgmgr_parser_update_disabled_pkg_info_in_db(const char *pkgid)
 	_LOGD("pkgmgr_parser_update_disabled_pkg_info_in_db(%s)\n", pkgid);
 
 	/*open db*/
-	ret = pkgmgr_parser_check_and_create_db();
+	ret = zone_pkgmgr_parser_check_and_create_db(zone);
 	retvm_if(ret < 0, PMINFO_R_ERROR, "pkgmgr_parser_check_and_create_db(%s) failed.\n", pkgid);
 
+	// pkgmgr changeable DB transaction
 	/*Begin transaction*/
 	ret = sqlite3_exec(pkgmgr_parser_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
 	if (ret != SQLITE_OK) {
 		_LOGE("sqlite3_exec(BEGIN EXCLUSIVE) failed.\n");
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -2215,6 +2643,8 @@ API int pkgmgr_parser_update_disabled_pkg_info_in_db(const char *pkgid)
 		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
 		if (ret != SQLITE_OK)
 			_LOGE("sqlite3_exec(ROLLBACK) failed.\n");
+
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
@@ -2226,13 +2656,18 @@ API int pkgmgr_parser_update_disabled_pkg_info_in_db(const char *pkgid)
 		if (ret != SQLITE_OK)
 			_LOGE("sqlite3_exec(ROLLBACK) failed.\n");
 
-		ret = -1;
+		ret = PM_PARSER_R_ERROR;
 		goto err;
 	}
 
 err:
 	pkgmgr_parser_close_db();
 	return ret;
+}
+
+API int pkgmgr_parser_update_disabled_pkg_info_in_db(const char *pkgid)
+{
+	return zone_pkgmgr_parser_update_disabled_pkg_info_in_db(pkgid, NULL);
 }
 
 int pkgmgr_parser_insert_app_aliasid_info_in_db(void)
@@ -2264,8 +2699,8 @@ int pkgmgr_parser_insert_app_aliasid_info_in_db(void)
 
 		_LOGD("Transaction Begin\n");
 
-		/*delete all the previous entries from package_app_aliasid tables*/
-		query = sqlite3_mprintf("delete from package_app_aliasid");
+		/*delete previous predefined entries from package_app_aliasid tables*/
+		query = sqlite3_mprintf("delete from package_app_aliasid where type = %d", ALIAS_APPID_TYPE_PREDEFINED);
 		ret = __exec_db_query(pkgmgr_db, query, NULL, NULL);
 		sqlite3_free(query);
 		tryvm_if(ret != SQLITE_OK,ret = PM_PARSER_R_ERROR,"sqlite exec failed to delete entries from package_app_aliasid!!");
@@ -2295,7 +2730,8 @@ int pkgmgr_parser_insert_app_aliasid_info_in_db(void)
 			__str_trim(app_id);
 
 			/* Insert the data into DB*/
-			query = sqlite3_mprintf("insert into package_app_aliasid(app_id, alias_id) values(%Q ,%Q)",tizen_id,app_id);
+			query = sqlite3_mprintf("insert into package_app_aliasid(app_id, alias_id, type) values(%Q ,%Q, %d)",
+			app_id, tizen_id, ALIAS_APPID_TYPE_PREDEFINED);
 			ret = __exec_db_query(pkgmgr_db, query, NULL, NULL);
 			sqlite3_free(query);
 			tryvm_if(ret != SQLITE_OK,ret = PM_PARSER_R_ERROR, "sqlite exec failed to insert entries into package_app_aliasid table!!");
@@ -2389,7 +2825,8 @@ int pkgmgr_parser_update_app_aliasid_info_in_db(void)
 			__str_trim(app_id);
 
 			/* Insert the data into DB*/
-			query = sqlite3_mprintf("insert or replace into package_app_aliasid(app_id, alias_id) values(%Q ,%Q)",tizen_id,app_id);
+			query = sqlite3_mprintf("insert or replace into package_app_aliasid(app_id, alias_id, type) values(%Q ,%Q, %d)",
+						app_id,tizen_id,ALIAS_APPID_TYPE_PREDEFINED);
 			ret = __exec_db_query(pkgmgr_db, query, NULL, NULL);
 			sqlite3_free(query);
 			tryvm_if(ret != SQLITE_OK,ret = PM_PARSER_R_ERROR, "sqlite exec failed to insert entries into package_app_aliasid table!!");
@@ -2428,4 +2865,289 @@ catch:
 
 
 }
+
+#ifdef _APPFW_FEATURE_EXPANSION_PKG_INSTALL
+int pkgmgr_parser_insert_tep_in_db(const char *pkgid, const char *tep_name)
+{
+	int ret = PM_PARSER_R_OK;
+	sqlite3 *pkgmgr_db = NULL;
+	char *query = NULL;
+
+	retvm_if(pkgid == NULL, PMINFO_R_ERROR, "pkgid is NULL.");
+	retvm_if(tep_name == NULL, PMINFO_R_ERROR, "tep path is NULL.");
+
+	/*Open the pkgmgr DB*/
+	ret = db_util_open_with_options(MANIFEST_DB, &pkgmgr_db, SQLITE_OPEN_READWRITE, NULL);
+	if(ret != SQLITE_OK){
+		_LOGE("connect db [%s] failed!\n", MANIFEST_DB);
+		return PM_PARSER_R_ERROR;
+	}
+
+	/*Begin Transaction*/
+	ret = sqlite3_exec(pkgmgr_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PM_PARSER_R_ERROR, "Failed to begin transaction");
+
+	_LOGD("Transaction Begin\n");
+
+	/* Updating TEP info in "package_info" table */
+	query = sqlite3_mprintf("UPDATE package_info "\
+						"SET package_tep_name = %Q "\
+						"WHERE package = %Q", tep_name, pkgid);
+
+	ret = __exec_db_query(pkgmgr_db, query, NULL, NULL);
+	sqlite3_free(query);
+	tryvm_if(ret != SQLITE_OK, ret = PM_PARSER_R_ERROR, "sqlite exec failed to insert entries into package_info!!");
+
+	/* Updating TEP info in "package_app_info" table */
+	query = sqlite3_mprintf("UPDATE package_app_info "\
+						"SET app_tep_name = %Q "\
+						"WHERE package = %Q", tep_name, pkgid);
+
+	ret = __exec_db_query(pkgmgr_db, query, NULL, NULL);
+	sqlite3_free(query);
+	tryvm_if(ret != SQLITE_OK, ret = PM_PARSER_R_ERROR, "sqlite exec failed to insert entries into package_app_info!!");
+
+
+	/*Commit transaction*/
+	ret = sqlite3_exec(pkgmgr_db, "COMMIT", NULL, NULL, NULL);
+	if (ret != SQLITE_OK) {
+		_LOGE("Failed to commit transaction, Rollback now\n");
+		ret = sqlite3_exec(pkgmgr_db, "ROLLBACK", NULL, NULL, NULL);
+		if (ret != SQLITE_OK)
+			_LOGE("Failed to Rollback\n");
+
+		ret = PM_PARSER_R_ERROR;
+		goto catch;
+	}
+	_LOGD("Transaction Commit and End\n");
+	ret =  PM_PARSER_R_OK;
+
+catch:
+	sqlite3_close(pkgmgr_db);
+	return ret;
+}
+
+int pkgmgr_parser_update_tep_in_db(const char *pkgid, const char *tep_name)
+{
+	int ret = PM_PARSER_R_OK;
+	sqlite3 *pkgmgr_db = NULL;
+	char *query = NULL;
+
+	retvm_if(pkgid == NULL, PMINFO_R_ERROR, "pkgid is NULL.");
+	retvm_if(tep_name == NULL, PMINFO_R_ERROR, "tep name is NULL.");
+
+	/*Open the pkgmgr DB*/
+	ret = db_util_open_with_options(MANIFEST_DB, &pkgmgr_db, SQLITE_OPEN_READWRITE, NULL);
+	if(ret != SQLITE_OK){
+		_LOGE("connect db [%s] failed!\n", MANIFEST_DB);
+		return PM_PARSER_R_ERROR;
+	}
+
+	/*Begin Transaction*/
+	ret = sqlite3_exec(pkgmgr_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PM_PARSER_R_ERROR, "Failed to begin transaction");
+
+	_LOGD("Transaction Begin\n");
+
+	/* Updating TEP info in "package_info" table */
+	query = sqlite3_mprintf("UPDATE package_info "\
+						"SET package_tep_name = %Q "\
+						"WHERE package = %Q", tep_name, pkgid);
+
+	ret = __exec_db_query(pkgmgr_db, query, NULL, NULL);
+	sqlite3_free(query);
+	tryvm_if(ret != SQLITE_OK, ret = PM_PARSER_R_ERROR, "sqlite exec failed to insert entries into package_info!!");
+
+
+	/* Updating TEP info in "package_app_info" table */
+	query = sqlite3_mprintf("UPDATE package_app_info "\
+						"SET app_tep_name = %Q "\
+						"WHERE package = %Q", tep_name, pkgid);
+
+	ret = __exec_db_query(pkgmgr_db, query, NULL, NULL);
+	sqlite3_free(query);
+	tryvm_if(ret != SQLITE_OK, ret = PM_PARSER_R_ERROR, "sqlite exec failed to insert entries into package_app_info!!");
+
+	/*Commit transaction*/
+	ret = sqlite3_exec(pkgmgr_db, "COMMIT", NULL, NULL, NULL);
+	if (ret != SQLITE_OK) {
+		_LOGE("Failed to commit transaction, Rollback now\n");
+		ret = sqlite3_exec(pkgmgr_db, "ROLLBACK", NULL, NULL, NULL);
+		if (ret != SQLITE_OK)
+			_LOGE("Failed to Rollback\n");
+
+		ret = PM_PARSER_R_ERROR;
+		goto catch;
+	}
+	_LOGD("Transaction Commit and End\n");
+	ret =  PM_PARSER_R_OK;
+
+catch:
+	sqlite3_close(pkgmgr_db);
+	return ret;
+}
+
+int pkgmgr_parser_delete_tep_in_db(const char *pkgid)
+{
+
+	int ret = PM_PARSER_R_OK;
+	sqlite3 *pkgmgr_db = NULL;
+	char *query = NULL;
+	int row_exist = 0;
+	sqlite3_stmt *stmt = NULL;
+
+	retvm_if(pkgid == NULL, PMINFO_R_ERROR, "pkgid is NULL.");
+
+	/*Open the pkgmgr DB*/
+	ret = db_util_open_with_options(MANIFEST_DB, &pkgmgr_db, SQLITE_OPEN_READWRITE, NULL);
+	if(ret != SQLITE_OK){
+		_LOGE("connect db [%s] failed!\n", MANIFEST_DB);
+		return PM_PARSER_R_ERROR;
+	}
+
+	/*Check for any existing entry having same pkgid*/
+	query = sqlite3_mprintf("select count(*) from package_info "\
+					"where pkgid=%Q", pkgid);
+	ret = sqlite3_prepare_v2(pkgmgr_db, query, strlen(query), &stmt, NULL);
+	tryvm_if(ret != PMINFO_R_OK, ret = PMINFO_R_ERROR, "sqlite3_prepare_v2 failed[%s]\n", query);
+
+	/*step query*/
+	ret = sqlite3_step(stmt);
+	if(ret == SQLITE_ROW) {
+		row_exist  = sqlite3_column_int(stmt,0);
+	}
+	sqlite3_free(query);
+
+	if(row_exist){
+
+		/*Begin Transaction*/
+		ret = sqlite3_exec(pkgmgr_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
+		tryvm_if(ret != SQLITE_OK, ret = PM_PARSER_R_ERROR, "Failed to begin transaction");
+
+		_LOGD("Transaction Begin\n");
+
+		/* Deleting TEP info in "package_info" table */
+		query = sqlite3_mprintf("UPDATE package_info "\
+							"SET package_tep_name = %Q "\
+							"WHERE package = %Q", NULL, pkgid);
+
+		ret = __exec_db_query(pkgmgr_db, query, NULL, NULL);
+		sqlite3_free(query);
+
+		if (ret != SQLITE_OK) {
+			_LOGD("Delete from DB failed. Rollback now\n");
+			ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
+			if (ret != SQLITE_OK)
+				_LOGE("Failed to commit transaction, Rollback now\n");
+
+			ret = PM_PARSER_R_ERROR;
+			goto catch;
+		}
+
+		/* Deleting TEP info in "package_app_info" table */
+		query = sqlite3_mprintf("UPDATE package_app_info "\
+							"SET app_tep_name = %Q "\
+							"WHERE package = %Q", NULL, pkgid);
+
+		ret = __exec_db_query(pkgmgr_db, query, NULL, NULL);
+		sqlite3_free(query);
+
+		if (ret != SQLITE_OK) {
+			_LOGD("Delete from DB failed. Rollback now\n");
+			ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
+			if (ret != SQLITE_OK)
+				_LOGE("Failed to commit transaction, Rollback now\n");
+
+			ret = PM_PARSER_R_ERROR;
+			goto catch;
+		}
+
+
+		/*Commit transaction*/
+		ret = sqlite3_exec(pkgmgr_db, "COMMIT", NULL, NULL, NULL);
+		if (ret != SQLITE_OK) {
+			_LOGE("Failed to commit transaction, Rollback now\n");
+			ret = sqlite3_exec(pkgmgr_db, "ROLLBACK", NULL, NULL, NULL);
+			if (ret != SQLITE_OK)
+				_LOGE("Failed to Rollback\n");
+
+			ret = PM_PARSER_R_ERROR;
+			goto catch;
+		}
+		_LOGD("Transaction Commit and End\n");
+		ret =  PM_PARSER_R_OK;
+	}else{
+		_LOGE("PKGID does not exist in the table");
+		ret = PM_PARSER_R_ERROR;
+	}
+
+catch:
+	sqlite3_close(pkgmgr_db);
+	sqlite3_finalize(stmt);
+
+	return ret;
+}
+#endif
+
+#ifdef _APPFW_FEATURE_MOUNT_INSTALL
+int pkgmgr_parser_insert_mount_install_info_in_db(const char *pkgid, bool ismount, const char *tpk_name)
+{
+	int ret = PM_PARSER_R_OK;
+	char *query = NULL;
+	int is_mnt = 0;
+
+	retvm_if(pkgid == NULL, PMINFO_R_ERROR, "pkgid is NULL.");
+	retvm_if(tpk_name == NULL, PMINFO_R_ERROR, "tpk_name is NULL.");
+
+	ret = pkgmgr_parser_check_and_create_db();
+	retvm_if(ret == -1, PM_PARSER_R_ERROR, "Failed to open DB");
+
+	ret = pkgmgr_parser_initialize_db();
+	tryvm_if(ret == -1, ret = PM_PARSER_R_ERROR, "Failed to initialize DB");
+
+	// pkgmgr parser DB transaction
+	/*Begin transaction*/
+	ret = sqlite3_exec(pkgmgr_parser_db, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
+	tryvm_if(ret != SQLITE_OK, ret = PM_PARSER_R_ERROR, "Failed to begin transaction[%d]\n", ret);
+
+	_LOGD("Transaction Begin\n");
+
+	if (ismount) {
+		is_mnt = 1;
+	}
+
+	/* Updating mount_install value in "package_app_info" table */
+	query = sqlite3_mprintf("UPDATE package_app_info "\
+						"SET app_mount_install = '%d', "\
+						"app_tpk_name = %Q "\
+						"WHERE package = %Q", is_mnt, tpk_name, pkgid);
+
+	ret = __exec_query(query);
+	_LOGD("Query: [%s]", query);
+	sqlite3_free(query);
+	tryvm_if(ret != SQLITE_OK, ret = PM_PARSER_R_ERROR, "sqlite exec failed to insert entries into package_app_info!!");
+
+
+	/*Commit transaction*/
+	ret = sqlite3_exec(pkgmgr_parser_db, "COMMIT", NULL, NULL, NULL);
+	if (ret != SQLITE_OK) {
+		_LOGD("Failed to commit transaction. Rollback now\n");
+		ret = sqlite3_exec(pkgmgr_parser_db, "ROLLBACK", NULL, NULL, NULL);
+		if (ret != SQLITE_OK)
+			_LOGE("Failed to commit transaction. Rollback now\n");
+
+		ret = PM_PARSER_R_ERROR;
+		goto catch;
+	}
+	_LOGD("Transaction Commit and End\n");
+	ret =  PM_PARSER_R_OK;
+
+catch:
+	pkgmgr_parser_close_db();
+	return ret;
+}
+
+
+
+#endif
 

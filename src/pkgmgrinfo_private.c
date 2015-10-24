@@ -23,6 +23,11 @@
 
 #include "pkgmgrinfo_private.h"
 
+#ifdef LOG_TAG
+#undef LOG_TAG
+#endif
+#define LOG_TAG "PKGMGR_INFO"
+
 struct _pkginfo_str_map_t {
 	pkgmgrinfo_pkginfo_filter_prop_str prop;
 	const char *property;
@@ -64,7 +69,7 @@ static struct _pkginfo_bool_map_t pkginfo_bool_prop_map[] = {
 	{E_PMINFO_PKGINFO_PROP_PACKAGE_NODISPLAY_SETTING,	PMINFO_PKGINFO_PROP_PACKAGE_NODISPLAY_SETTING},
 	{E_PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_DISABLE,	PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_DISABLE},
 	{E_PMINFO_PKGINFO_PROP_PACKAGE_DISABLE,	PMINFO_PKGINFO_PROP_PACKAGE_DISABLE},
-	{E_PMINFO_PKGINFO_PROP_PACKAGE_USE_RESET,	PMINFO_PKGINFO_PROP_PACKAGE_USE_RESET}
+	{E_PMINFO_PKGINFO_PROP_PACKAGE_SYSTEM,	PMINFO_PKGINFO_PROP_PACKAGE_SYSTEM}
 };
 
 struct _appinfo_str_map_t {
@@ -74,10 +79,8 @@ struct _appinfo_str_map_t {
 
 static struct _appinfo_str_map_t appinfo_str_prop_map[] = {
 	{E_PMINFO_APPINFO_PROP_APP_ID,		PMINFO_APPINFO_PROP_APP_ID},
-	{E_PMINFO_APPINFO_PROP_APP_COMPONENT,	PMINFO_APPINFO_PROP_APP_COMPONENT},
 	{E_PMINFO_APPINFO_PROP_APP_COMPONENT_TYPE,	PMINFO_APPINFO_PROP_APP_COMPONENT_TYPE},
 	{E_PMINFO_APPINFO_PROP_APP_EXEC, 	PMINFO_APPINFO_PROP_APP_EXEC},
-	{E_PMINFO_APPINFO_PROP_APP_AMBIENT_SUPPORT, 	PMINFO_APPINFO_PROP_APP_AMBIENT_SUPPORT},
 	{E_PMINFO_APPINFO_PROP_APP_ICON, 	PMINFO_APPINFO_PROP_APP_ICON},
 	{E_PMINFO_APPINFO_PROP_APP_TYPE, 	PMINFO_APPINFO_PROP_APP_TYPE},
 	{E_PMINFO_APPINFO_PROP_APP_OPERATION, 	PMINFO_APPINFO_PROP_APP_OPERATION},
@@ -85,7 +88,8 @@ static struct _appinfo_str_map_t appinfo_str_prop_map[] = {
 	{E_PMINFO_APPINFO_PROP_APP_MIME, 	PMINFO_APPINFO_PROP_APP_MIME},
 	{E_PMINFO_APPINFO_PROP_APP_CATEGORY, 	PMINFO_APPINFO_PROP_APP_CATEGORY},
 	{E_PMINFO_APPINFO_PROP_APP_HWACCELERATION,	PMINFO_APPINFO_PROP_APP_HWACCELERATION},
-	{E_PMINFO_APPINFO_PROP_APP_SCREENREADER,	PMINFO_APPINFO_PROP_APP_SCREENREADER}
+	{E_PMINFO_APPINFO_PROP_APP_SCREENREADER,	PMINFO_APPINFO_PROP_APP_SCREENREADER},
+	{E_PMINFO_APPINFO_PROP_APP_BG_CATEGORY, PMINFO_APPINFO_PROP_APP_BG_CATEGORY},
 };
 
 struct _appinfo_int_map_t {
@@ -111,7 +115,8 @@ static struct _appinfo_bool_map_t appinfo_bool_prop_map[] = {
 	{E_PMINFO_APPINFO_PROP_APP_LAUNCHCONDITION,		PMINFO_APPINFO_PROP_APP_LAUNCHCONDITION},
 	{E_PMINFO_APPINFO_PROP_APP_SUPPORT_DISABLE,		PMINFO_APPINFO_PROP_APP_SUPPORT_DISABLE},
 	{E_PMINFO_APPINFO_PROP_APP_DISABLE,		PMINFO_APPINFO_PROP_APP_DISABLE},
-	{E_PMINFO_APPINFO_PROP_APP_REMOVABLE,		PMINFO_APPINFO_PROP_APP_REMOVABLE}
+	{E_PMINFO_APPINFO_PROP_APP_REMOVABLE,		PMINFO_APPINFO_PROP_APP_REMOVABLE},
+	{E_PMINFO_APPINFO_PROP_APP_BG_USER_DISABLE,		PMINFO_APPINFO_PROP_APP_BG_USER_DISABLE}
 };
 
 inline int _pkgmgrinfo_validate_cb(void *data, int ncols, char **coltxt, char **colname)
@@ -229,6 +234,67 @@ inline pkgmgrinfo_appinfo_filter_prop_bool _pminfo_appinfo_convert_to_prop_bool(
 	return prop;
 }
 
+static int __db_busy_handler(void *pData, int count)
+{
+	_LOGD("count=[%d]", count);
+
+	// waiting time : 10sec = 500 * 20ms
+	if (count < 500) {
+		_LOGE("__db_busy_handler(count=%d) is called. pid=[%d]", count, getpid());
+		usleep(20*1000);
+		return 1;
+	} else {
+		_LOGE("__db_busy_handler(count=%d) is failed. pid=[%d]", count, getpid());
+		return 0;
+	}
+}
+
+int _pminfo_db_open(const char *dbfile, sqlite3 **database)
+{
+	int ret = 0;
+	retvm_if(dbfile == NULL, PMINFO_R_ERROR, "dbfile is NULL");
+	retvm_if(database == NULL, PMINFO_R_ERROR, "database is NULL");
+
+	ret = sqlite3_open_v2(dbfile, database, SQLITE_OPEN_READONLY, NULL);
+	tryvm_if(ret != SQLITE_OK, , "sqlite3_open(%s) failed. [ret = %d]", dbfile, ret);
+
+	ret = sqlite3_busy_handler(*database, __db_busy_handler, NULL);
+	tryvm_if(ret != SQLITE_OK, , "sqlite3_busy_handler(%s) failed. [ret = %d]", dbfile, ret);
+
+catch:
+	if (ret != SQLITE_OK) {
+		if (*database) {
+			_LOGE("error: sqlite3_close(%s) is done.", dbfile);
+			sqlite3_close(*database);
+		}
+	}
+
+	return ret;
+}
+
+int _pminfo_db_open_with_options(const char *dbfile, sqlite3 **database, int flags)
+{
+	int ret = 0;
+	retvm_if(dbfile == NULL, PMINFO_R_ERROR, "dbfile is NULL");
+	retvm_if(database == NULL, PMINFO_R_ERROR, "database is NULL");
+
+	ret = sqlite3_open_v2(dbfile, database, flags, NULL);
+	tryvm_if(ret != SQLITE_OK, , "sqlite3_open_v2(%s) failed. [ret = %d]", dbfile, ret);
+
+	ret = sqlite3_busy_handler(*database, __db_busy_handler, NULL);
+	tryvm_if(ret != SQLITE_OK, , "sqlite3_busy_handler(%s) failed. [ret = %d]", dbfile, ret);
+
+catch:
+	if (ret != SQLITE_OK) {
+		if (*database) {
+			_LOGE("error: sqlite3_close(%s) is done.", dbfile);
+			sqlite3_close(*database);
+		}
+	}
+
+	return ret;
+}
+
 int __exec_db_query(sqlite3 *db, char *query, sqlite_query_callback callback, void *data)
 {
 	char *error_message = NULL;
@@ -243,20 +309,15 @@ int __exec_db_query(sqlite3 *db, char *query, sqlite_query_callback callback, vo
 	return 0;
 }
 
-void __cleanup_list_pkginfo(pkgmgr_pkginfo_x *list_pkginfo, pkgmgr_pkginfo_x *node)
+void __cleanup_list_pkginfo(GList **list_pkginfo)
 {
-	pkgmgr_pkginfo_x *temp_node = NULL;
-
-	if (list_pkginfo != NULL) {
-		LISTHEAD(list_pkginfo, node);
-		temp_node = node->next;
-		node = temp_node;
-		while (node) {
-			temp_node = node->next;
-			__cleanup_pkginfo(node);
-			node = temp_node;
+	GList *node = NULL;
+	if (*list_pkginfo != NULL) {
+		for(node = *list_pkginfo; node; node = node->next){
+			__cleanup_pkginfo((pkgmgr_pkginfo_x *)node->data);
 		}
-		__cleanup_pkginfo(list_pkginfo);
+		g_list_free(*list_pkginfo);
+		*list_pkginfo = NULL;
 	}
 }
 
@@ -278,15 +339,7 @@ void __cleanup_appinfo(pkgmgr_appinfo_x *data)
 		return;
 
 	FREE_AND_NULL(data->locale);
-
-	manifest_x *mfx = calloc(1, sizeof(manifest_x));
-	if (mfx == NULL) {
-		_LOGE("out of memory");
-		return;
-	}
-
-	mfx->uiapplication = data->uiapp_info;
-	_pkgmgrinfo_basic_free_manifest_x(mfx);
+	_pkgmgrinfo_basic_free_uiapplication_x(data->uiapp_info);
 	FREE_AND_NULL(data);
 	return;
 }
@@ -302,14 +355,15 @@ char* __convert_system_locale_to_manifest_locale()
 		return strdup(DEFAULT_LOCALE);
 	}
 
-	char *locale = malloc(6);
+	unsigned int size = 6 * sizeof(char);
+	char *locale = malloc(size);
 	if (!locale) {
 		_LOGE("Malloc Failed\n");
 		FREE_AND_NULL(syslocale);
 		return strdup(DEFAULT_LOCALE);
 	}
 
-	sprintf(locale, "%c%c-%c%c", syslocale[0], syslocale[1], tolower(syslocale[3]), tolower(syslocale[4]));
+	snprintf(locale, size, "%c%c-%c%c", syslocale[0], syslocale[1], tolower(syslocale[3]), tolower(syslocale[4]));
 
 	FREE_AND_NULL(syslocale);
 	return locale;
@@ -335,138 +389,138 @@ void __get_filter_condition(gpointer data, char **condition)
 	char temp[PKG_STRING_LEN_MAX] = {'\0'};
 	switch (node->prop) {
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_ID:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package=%Q", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_TYPE:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_type='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_type=%Q", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_VERSION:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_version='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_version=%Q", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_INSTALL_LOCATION:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.install_location='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.install_location=%Q", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_INSTALLED_STORAGE:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.installed_storage='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.installed_storage=%Q", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_NAME:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.author_name='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.author_name=%Q", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_HREF:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.author_href='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.author_href=%Q", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_STORECLIENT_ID:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.storeclient_id='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.storeclient_id=%Q", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_AUTHOR_EMAIL:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.author_email='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.author_email=%Q", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_SIZE:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_size='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_size=%Q", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_REMOVABLE:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_removable IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_removable IN %s", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_PRELOAD:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_preload IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_preload IN %s", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_READONLY:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_readonly IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_readonly IN %s", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_UPDATE:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_update IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_update IN %s", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_APPSETTING:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_appsetting IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_appsetting IN %s", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_NODISPLAY_SETTING:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_nodisplay IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_nodisplay IN %s", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_DISABLE:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_support_disable IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_support_disable IN %s", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_DISABLE:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_disable IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_disable IN %s", node->value);
 		break;
 	case E_PMINFO_PKGINFO_PROP_PACKAGE_SUPPORT_MODE:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_support_mode & %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_support_mode & %s", node->value);
 		break;
-	case E_PMINFO_PKGINFO_PROP_PACKAGE_USE_RESET:
-		snprintf(buf, MAX_QUERY_LEN, "package_info.package_reserve2 IN %s", node->value);
+	case E_PMINFO_PKGINFO_PROP_PACKAGE_SYSTEM:
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_info.package_system IN %s", node->value);
 		break;
 
 	case E_PMINFO_APPINFO_PROP_APP_ID:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_id='%s'", node->value);
-		break;
-	case E_PMINFO_APPINFO_PROP_APP_COMPONENT:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_component='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_id=%Q", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_COMPONENT_TYPE:
 		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.component_type=%Q", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_EXEC:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_exec='%s'", node->value);
-		break;
-	case E_PMINFO_APPINFO_PROP_APP_AMBIENT_SUPPORT:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_ambient_support='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_exec=%Q", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_ICON:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_localized_info.app_icon='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_localized_info.app_icon=%Q", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_TYPE:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_type='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_type=%Q", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_OPERATION:
 		snprintf(temp, PKG_STRING_LEN_MAX, "(%s)", node->value);
-		snprintf(buf, MAX_QUERY_LEN, "package_app_app_svc.operation IN %s", temp);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_app_svc.operation IN %s", temp);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_URI:
 		snprintf(temp, PKG_STRING_LEN_MAX, "(%s)", node->value);
-		snprintf(buf, MAX_QUERY_LEN, "package_app_app_svc.uri_scheme IN %s", temp);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_app_svc.uri_scheme IN %s", temp);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_MIME:
 		snprintf(temp, PKG_STRING_LEN_MAX, "(%s)", node->value);
-		snprintf(buf, MAX_QUERY_LEN, "package_app_app_svc.mime_type IN %s", temp);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_app_svc.mime_type IN %s", temp);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_CATEGORY:
 		snprintf(temp, PKG_STRING_LEN_MAX, "(%s)", node->value);
-		snprintf(buf, MAX_QUERY_LEN, "package_app_app_category.category IN %s", temp);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_app_category.category IN %s", temp);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_NODISPLAY:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_nodisplay IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_nodisplay IN %s", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_MULTIPLE:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_multiple IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_multiple IN %s", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_ONBOOT:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_onboot IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_onboot IN %s", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_AUTORESTART:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_autorestart IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_autorestart IN %s", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_TASKMANAGE:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_taskmanage IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_taskmanage IN %s", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_HWACCELERATION:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_hwacceleration='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_hwacceleration=%Q", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_SCREENREADER:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_screenreader='%s'", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_screenreader=%Q", node->value);
+		break;
+	case E_PMINFO_APPINFO_PROP_APP_BG_USER_DISABLE:
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_background_category & 1 = %q", node->value);
+		break;
+	case E_PMINFO_APPINFO_PROP_APP_BG_CATEGORY:
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_background_category & %q = %q", node->value, node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_LAUNCHCONDITION:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_launchcondition IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_launchcondition IN %s", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_SUPPORT_DISABLE:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_support_disable IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_support_disable IN %s", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_DISABLE:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_disable IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_disable IN %s", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_REMOVABLE:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_removable IN %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_removable IN %s", node->value);
 		break;
 	case E_PMINFO_APPINFO_PROP_APP_SUPPORT_MODE:
-		snprintf(buf, MAX_QUERY_LEN, "package_app_info.app_support_mode & %s", node->value);
+		sqlite3_snprintf(MAX_QUERY_LEN, buf, "package_app_info.app_support_mode & %s", node->value);
 		break;
 	default:
 		_LOGE("Invalid Property Type\n");
@@ -514,3 +568,11 @@ int __appinfo_check_installed_storage(pkgmgr_appinfo_x *appinfo)
 	return PMINFO_R_OK;
 }
 
+void _pminfo_destroy_node(gpointer data)
+{
+	ret_if(data == NULL);
+	pkgmgrinfo_node_x *node = (pkgmgrinfo_node_x*)data;
+	FREE_AND_NULL(node->value);
+	FREE_AND_NULL(node->key);
+	FREE_AND_NULL(node);
+}

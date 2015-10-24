@@ -34,7 +34,7 @@
 #include <vconf.h>
 #include <glib.h>
 #include <db-util.h>
-#include <journal/appcore.h>
+#include <vasum.h>
 
 #include "pkgmgr_parser.h"
 #include "pkgmgr_parser_internal.h"
@@ -43,23 +43,24 @@
 #include "pkgmgr_parser_plugin.h"
 
 #include "pkgmgrinfo_debug.h"
+#include "pkgmgrinfo_zone.h"
 
 #ifdef LOG_TAG
 #undef LOG_TAG
 #endif
 #define LOG_TAG "PKGMGR_PARSER"
 
-#define WATCH_CLOCK_CATEGORY "http://tizen.org/category/wearable_clock"
-#define MANIFEST_RW_DIRECTORY "/opt/share/packages"
-#define MANIFEST_RO_DIRECTORY "/usr/share/packages"
+#define WATCH_CLOCK_CATEGORY "org.tizen.wmanager.WATCH_CLOCK"
+#define MANIFEST_RW_DIRECTORY "opt/share/packages"
+#define MANIFEST_RO_DIRECTORY "usr/share/packages"
 #define ASCII(s) (const char *)s
 #define XMLCHAR(s) (const xmlChar *)s
 
 const char *package;
 
 static int __ps_process_label(xmlTextReaderPtr reader, label_x *label);
-static int __ps_process_privilege(xmlTextReaderPtr reader, privilege_x *privilege);
-static int __ps_process_privileges(xmlTextReaderPtr reader, privileges_x *privileges);
+static int __ps_process_privilege(xmlTextReaderPtr reader, manifest_x *mfx);
+static int __ps_process_privileges(xmlTextReaderPtr reader, manifest_x *mfx);
 static int __ps_process_deviceprofile(xmlTextReaderPtr reader, deviceprofile_x *deviceprofile);
 static int __ps_process_allowed(xmlTextReaderPtr reader, allowed_x *allowed);
 static int __ps_process_operation(xmlTextReaderPtr reader, operation_x *operation);
@@ -72,7 +73,9 @@ static int __ps_process_category(xmlTextReaderPtr reader, category_x *category);
 static int __ps_process_metadata(xmlTextReaderPtr reader, metadata_x *metadata);
 static int __ps_process_permission(xmlTextReaderPtr reader, permission_x *permission);
 static int __ps_process_compatibility(xmlTextReaderPtr reader, compatibility_x *compatibility);
+#if 0
 static int __ps_process_resolution(xmlTextReaderPtr reader, resolution_x *resolution);
+#endif
 static int __ps_process_request(xmlTextReaderPtr reader, request_x *request);
 static int __ps_process_define(xmlTextReaderPtr reader, define_x *define);
 static int __ps_process_appsvc(xmlTextReaderPtr reader, appsvc_x *appsvc);
@@ -81,7 +84,9 @@ static int __ps_process_datashare(xmlTextReaderPtr reader, datashare_x *datashar
 static int __ps_process_icon(xmlTextReaderPtr reader, icon_x *icon);
 static int __ps_process_author(xmlTextReaderPtr reader, author_x *author);
 static int __ps_process_description(xmlTextReaderPtr reader, description_x *description);
+#if 0
 static int __ps_process_capability(xmlTextReaderPtr reader, capability_x *capability);
+#endif
 static int __ps_process_license(xmlTextReaderPtr reader, license_x *license);
 static int __ps_process_datacontrol(xmlTextReaderPtr reader, datacontrol_x *datacontrol);
 static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *uiapplication);
@@ -95,6 +100,31 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx);
 static int __process_manifest(xmlTextReaderPtr reader, manifest_x * mfx);
 
 
+static int __get_patch_trimmed_api_version(const char *api_version, char **trim_api_version)
+{
+	char *trim_version = NULL;
+	char *ptr = NULL;
+
+	trim_version = strdup(api_version);
+	if (trim_version == NULL) {
+		_LOGE("out of memory");
+		return -1;
+	}
+	ptr = strchr(trim_version, '.');
+	if (ptr) {
+		ptr = strchr(++ptr, '.');
+	}
+	if (ptr) {
+		if (atoi(++ptr) == 0) {
+			*(--ptr) = '\0';
+			_LOGD("api_version (%s -> %s)", api_version, trim_version);
+		}
+	}
+
+	*trim_api_version = trim_version;
+
+	return 0;
+}
 
 static void __save_xml_attribute(xmlTextReaderPtr reader, char *attribute, const char **xml_attribute, char *default_value)
 {
@@ -128,7 +158,7 @@ static void __save_xml_value(xmlTextReaderPtr reader, const char **xml_attribute
 	}
 }
 
-static void __save_xml_supportmode(xmlTextReaderPtr reader, manifest_x * mfx)
+static void __save_xml_support_mode(xmlTextReaderPtr reader, manifest_x * mfx)
 {
 	xmlChar *attrib_val = xmlTextReaderGetAttribute(reader, XMLCHAR("support-mode"));
 	if (attrib_val) {
@@ -144,7 +174,8 @@ static void __save_xml_supportmode(xmlTextReaderPtr reader, manifest_x * mfx)
 		if (strstr(ASCII(attrib_val), "screen-reader")) {
 			temp_mode |= PMINFO_SUPPORT_MODE_SCREEN_READER;	// PMINFO_MODE_PROP_SCREEN_READER		0x00000004
 		}
-		sprintf(buffer, "%d", temp_mode);
+
+		snprintf(buffer,sizeof(buffer), "%d", temp_mode);
 		mfx->support_mode = strdup(buffer);
 		xmlFree(attrib_val);
 	} else {
@@ -152,7 +183,58 @@ static void __save_xml_supportmode(xmlTextReaderPtr reader, manifest_x * mfx)
 	}
 }
 
-static void __save_xml_supportfeature(const char *metadata_key, uiapplication_x *uiapplication)
+static void __save_xml_support_mode_metadata(const char *value, uiapplication_x *uiapplication)
+{
+	if (value) {
+		char buffer[10] = {'\0'};
+		int temp_mode = 0;
+
+		if (uiapplication->support_mode)
+			temp_mode = atoi(uiapplication->support_mode);
+
+		if (strstr(value, "ultra-power-saving")) {
+			temp_mode |= PMINFO_SUPPORT_MODE_ULTRA_POWER_SAVING;	// PMINFO_MODE_PROP_ULTRA_POWER_SAVING	0x00000001
+		} else if (strstr(value, "cool-down")) {
+			temp_mode |= PMINFO_SUPPORT_MODE_COOL_DOWN;	// PMINFO_MODE_PROP_COOL_DOWN			0x00000002
+		} else if (strstr(value, "screen-reader")) {
+			temp_mode |= PMINFO_SUPPORT_MODE_SCREEN_READER;	// PMINFO_MODE_PROP_SCREEN_READER		0x00000004
+		} else if (strstr(value, "activation-stub")) {
+			temp_mode |= PMINFO_SUPPORT_MODE_ACTIVATION_STUB; // PMINFO_MODE_ACTIVATION_STUB		0x00000008
+		}
+
+		snprintf(buffer, sizeof(buffer), "%d", temp_mode);
+		if(uiapplication->support_mode)
+			free((void *)uiapplication->support_mode);
+		uiapplication->support_mode = strdup(buffer);
+	}
+}
+
+#define METADATA_KEY_EFFECTIVE_APPID "http://tizen.org/metadata/effective-appid"
+#define METADATA_KEY_PREFIX_BACKGROUND_CATEGORY "http://tizen.org/metadata/background-category/"
+
+static void __save_xml_metadata(metadata_x *metadata, uiapplication_x *uiapplication)
+{
+	if (metadata && metadata->key) {
+		// companian mode check
+		if (strcmp(metadata->key, "master_app_packagename") == 0)
+			FREE_AND_STRDUP("true", uiapplication->companion_type);
+		if (strcmp(metadata->key, METADATA_KEY_EFFECTIVE_APPID) == 0) {
+			if (metadata->value)
+				FREE_AND_STRDUP(metadata->value, uiapplication->effective_appid);
+		}
+		if (strncmp(metadata->key,
+			METADATA_KEY_PREFIX_BACKGROUND_CATEGORY,
+			strlen(METADATA_KEY_PREFIX_BACKGROUND_CATEGORY)) == 0) {
+			char *background_category;
+
+			background_category = strrchr(metadata->key, '/');
+			if (background_category && strlen(background_category + 1))
+				uiapplication->background_category = g_list_append(uiapplication->background_category, strdup(background_category + 1));
+		}
+	}
+}
+
+static void __save_xml_support_feature(const char *metadata_key, uiapplication_x *uiapplication)
 {
 	if (metadata_key) {
 		int temp_mode = 0;
@@ -160,25 +242,39 @@ static void __save_xml_supportfeature(const char *metadata_key, uiapplication_x 
 
 		if (uiapplication->support_feature) {
 			temp_mode = atoi(uiapplication->support_feature);
-			FREE_AND_NULL(uiapplication->support_feature);
 		}
+		FREE_AND_NULL(uiapplication->support_feature);
 
-		if (strcmp(metadata_key, "http://developer.samsung.com/tizen/metadata/multiwindow") == 0) {
-			temp_mode |= PMINFO_SUPPORT_FEATURE_MULTI_WINDOW;
-		} else if (strcmp(metadata_key, "http://developer.samsung.com/tizen/metadata/oomtermination") == 0) {
-			temp_mode |= PMINFO_SUPPORT_FEATURE_OOM_TERMINATION;
-		} else if (strcmp(metadata_key, "http://developer.samsung.com/tizen/metadata/largememory") == 0) {
-			temp_mode |= PMINFO_SUPPORT_FEATURE_LARGE_MEMORY;
-		}
-
-		sprintf(buffer, "%d", temp_mode);
+		snprintf(buffer, PKG_STRING_LEN_MAX, "%d", temp_mode);
 		uiapplication->support_feature = strdup(buffer);
-	} else {
-		uiapplication->support_feature = strdup("0");
 	}
 }
 
-static void __save_xml_installedtime(manifest_x * mfx)
+static void __save_xml_support_category(const char *category_key, uiapplication_x *uiapplication)
+{
+	if (category_key) {
+		int temp_mode = 0;
+		char buffer[PKG_STRING_LEN_MAX] = {'\0'};
+
+		if (uiapplication->support_category) {
+			temp_mode = atoi(uiapplication->support_category);
+		}
+		FREE_AND_NULL(uiapplication->support_category);
+
+		if (strcmp(category_key, "http://tizen.org/category/lockapp") == 0) {
+			temp_mode |= PMINFO_SUPPORT_CATEGORY_LOCK_APP;
+		} else if (strcmp(category_key, "http://tizen.org/category/homeapp") == 0) {
+			temp_mode |= PMINFO_SUPPORT_CATEGORY_HOME_APP;
+		} else if (strcmp(category_key, "http://tizen.org/category/ime") == 0) {
+			temp_mode |= PMINFO_SUPPORT_CATEGORY_IME_APP;
+		}
+
+		snprintf(buffer, PKG_STRING_LEN_MAX, "%d", temp_mode);
+		uiapplication->support_category = strdup(buffer);
+	}
+}
+
+static void __save_xml_installed_time(manifest_x * mfx)
 {
 	char buf[PKG_STRING_LEN_MAX] = {'\0'};
 	char *val = NULL;
@@ -189,7 +285,40 @@ static void __save_xml_installedtime(manifest_x * mfx)
 	mfx->installed_time = val;
 }
 
-static void __save_xml_defaultvalue(manifest_x * mfx)
+static void __save_xml_root_path(manifest_x * mfx)
+{
+	char root[PKG_STRING_LEN_MAX] = { '\0' };
+
+	if (mfx->root_path == NULL) {
+		if (strcmp(mfx->type,"rpm") == 0) {
+			snprintf(root, PKG_STRING_LEN_MAX - 1, "/opt/share/packages/%s.xml", mfx->package);
+			if (access(root, F_OK) == 0) {
+				memset(root, '\0', PKG_STRING_LEN_MAX);
+				snprintf(root, PKG_STRING_LEN_MAX - 1, "/opt/usr/apps/%s", mfx->package);
+			} else {
+				memset(root, '\0', PKG_STRING_LEN_MAX);
+				snprintf(root, PKG_STRING_LEN_MAX - 1, "/usr/apps/%s", mfx->package);
+			}
+		} else if (strcmp(mfx->type,"tpk") == 0) {
+			if (strcmp(mfx->backend_installer,"coretpk") == 0) {
+				snprintf(root, PKG_STRING_LEN_MAX - 1, "/opt/share/packages/%s.xml", mfx->package);
+				if (access(root, F_OK) == 0) {
+					memset(root, '\0', PKG_STRING_LEN_MAX);
+					snprintf(root, PKG_STRING_LEN_MAX - 1, "/opt/usr/apps/%s", mfx->package);
+				} else {
+					memset(root, '\0', PKG_STRING_LEN_MAX);
+					snprintf(root, PKG_STRING_LEN_MAX - 1, "/usr/apps/%s", mfx->package);
+				}
+			}
+		} else {
+			snprintf(root, PKG_STRING_LEN_MAX - 1, "/opt/usr/apps/%s", mfx->package);
+		}
+
+		mfx->root_path = strdup(root);
+	}
+}
+
+static void __save_xml_default_value(manifest_x * mfx)
 {
 	mfx->preload = strdup("False");
 	mfx->removable = strdup("True");
@@ -200,30 +329,52 @@ static void __save_xml_defaultvalue(manifest_x * mfx)
 	package = mfx->package;
 }
 
-static char *__pkgid_to_manifest(const char *pkgid)
+static char *__zone_pkgid_to_manifest(const char *pkgid, const char *zone)
 {
 	char *manifest;
 	int size;
+	char *rootpath = NULL;
 
 	if (pkgid == NULL) {
 		_LOGE("pkgid is NULL");
 		return NULL;
 	}
 
-	size = strlen(MANIFEST_RW_DIRECTORY) + strlen(pkgid) + 10;
+	if (zone == NULL || strlen(zone) == 0 || strcmp(zone, ZONE_HOST) == 0) {
+		size = strlen(MANIFEST_RW_DIRECTORY) + strlen(pkgid) + 11;
+	} else {
+		rootpath = __zone_get_root_path(zone);
+		if (rootpath == NULL) {
+			_LOGE("Failed to get rootpath");
+			return NULL;
+		}
+
+		size = strlen(rootpath) + strlen(MANIFEST_RW_DIRECTORY) + strlen(pkgid) + 11;
+	}
+
 	manifest = malloc(size);
 	if (manifest == NULL) {
 		_LOGE("No memory");
 		return NULL;
 	}
 	memset(manifest, '\0', size);
-	snprintf(manifest, size, MANIFEST_RW_DIRECTORY "/%s.xml", pkgid);
+
+	if (zone == NULL || strlen(zone) == 0 || strcmp(zone, ZONE_HOST) == 0) {
+		snprintf(manifest, size, "/%s/%s.xml", MANIFEST_RW_DIRECTORY, pkgid);
+	} else {
+		snprintf(manifest, size, "%s%s/%s.xml", rootpath, MANIFEST_RW_DIRECTORY, pkgid);
+	}
 
 	if (access(manifest, F_OK)) {
-		snprintf(manifest, size, MANIFEST_RO_DIRECTORY "/%s.xml", pkgid);
+		snprintf(manifest, size, "/%s/%s.xml", MANIFEST_RO_DIRECTORY, pkgid);
 	}
 
 	return manifest;
+}
+
+static char *__pkgid_to_manifest(const char *pkgid)
+{
+	return __zone_pkgid_to_manifest(pkgid, NULL);
 }
 
 static int __next_child_element(xmlTextReaderPtr reader, int depth)
@@ -274,7 +425,7 @@ static int __check_action_fota(char *const tagv[])
 		/*check tag :  fota is true */
 		if (ret_result && strcmp(ret_result, "fota") == 0) {
 			ret_result = strtok(NULL, delims);
-			if (strcmp(ret_result, "true") == 0) {
+			if (ret_result && strcmp(ret_result, "true") == 0) {
 				ret = PM_PARSER_R_OK;
 			}
 		} else
@@ -364,9 +515,13 @@ static int __ps_process_category(xmlTextReaderPtr reader, category_x *category)
 	return 0;
 }
 
-static int __ps_process_privilege(xmlTextReaderPtr reader, privilege_x *privilege)
+static int __ps_process_privilege(xmlTextReaderPtr reader, manifest_x* mfx)
 {
-	__save_xml_value(reader, &privilege->text);
+	xmlTextReaderRead(reader);
+	xmlChar *attrib_val = xmlTextReaderValue(reader);
+	if(attrib_val){
+		mfx->privileges = g_list_append(mfx->privileges,(gpointer)(ASCII(attrib_val)));
+	}
 	return 0;
 }
 
@@ -393,12 +548,14 @@ static int __ps_process_compatibility(xmlTextReaderPtr reader, compatibility_x *
 	return 0;
 }
 
+#if 0
 static int __ps_process_resolution(xmlTextReaderPtr reader, resolution_x *resolution)
 {
 	__save_xml_attribute(reader, "mime-type", &resolution->mimetype, NULL);
 	__save_xml_attribute(reader, "uri-scheme", &resolution->urischeme, NULL);
 	return 0;
 }
+#endif
 
 static int __ps_process_request(xmlTextReaderPtr reader, request_x *request)
 {
@@ -412,8 +569,6 @@ static int __ps_process_define(xmlTextReaderPtr reader, define_x *define)
 	const xmlChar *node;
 	int ret = -1;
 	int depth = -1;
-	allowed_x *tmp1 = NULL;
-	request_x *tmp2 = NULL;
 
 	__save_xml_attribute(reader, "path", &define->path, NULL);
 
@@ -432,7 +587,7 @@ static int __ps_process_define(xmlTextReaderPtr reader, define_x *define)
 				return -1;
 			}
 			memset(allowed, '\0', sizeof(allowed_x));
-			LISTADD(define->allowed, allowed);
+			define->allowed = g_list_append(define->allowed, allowed);
 			ret = __ps_process_allowed(reader, allowed);
 		} else if (!strcmp(ASCII(node), "request")) {
 			request_x *request = malloc(sizeof(request_x));
@@ -441,7 +596,7 @@ static int __ps_process_define(xmlTextReaderPtr reader, define_x *define)
 				return -1;
 			}
 			memset(request, '\0', sizeof(request_x));
-			LISTADD(define->request, request);
+			define->request = g_list_append(define->request, request);
 			ret = __ps_process_request(reader, request);
 		} else
 			return -1;
@@ -451,8 +606,6 @@ static int __ps_process_define(xmlTextReaderPtr reader, define_x *define)
 		}
 	}
 
-	SAFE_LISTHEAD(define->allowed, tmp1);
-	SAFE_LISTHEAD(define->request, tmp2);
 
 	return ret;
 }
@@ -462,10 +615,6 @@ static int __ps_process_appsvc(xmlTextReaderPtr reader, appsvc_x *appsvc)
 	const xmlChar *node;
 	int ret = -1;
 	int depth = -1;
-	operation_x *tmp1 = NULL;
-	uri_x *tmp2 = NULL;
-	mime_x *tmp3 = NULL;
-	subapp_x *tmp4 = NULL;
 
 	depth = xmlTextReaderDepth(reader);
 	while ((ret = __next_child_element(reader, depth))) {
@@ -482,7 +631,7 @@ static int __ps_process_appsvc(xmlTextReaderPtr reader, appsvc_x *appsvc)
 				return -1;
 			}
 			memset(operation, '\0', sizeof(operation_x));
-			LISTADD(appsvc->operation, operation);
+			appsvc->operation = g_list_append(appsvc->operation, operation);
 			ret = __ps_process_operation(reader, operation);
 			_LOGD("operation processing\n");
 		} else if (!strcmp(ASCII(node), "uri")) {
@@ -492,7 +641,7 @@ static int __ps_process_appsvc(xmlTextReaderPtr reader, appsvc_x *appsvc)
 				return -1;
 			}
 			memset(uri, '\0', sizeof(uri_x));
-			LISTADD(appsvc->uri, uri);
+			appsvc->uri = g_list_append(appsvc->uri, uri);
 			ret = __ps_process_uri(reader, uri);
 			_LOGD("uri processing\n");
 		} else if (!strcmp(ASCII(node), "mime")) {
@@ -502,7 +651,7 @@ static int __ps_process_appsvc(xmlTextReaderPtr reader, appsvc_x *appsvc)
 				return -1;
 			}
 			memset(mime, '\0', sizeof(mime_x));
-			LISTADD(appsvc->mime, mime);
+			appsvc->mime = g_list_append(appsvc->mime, mime);
 			ret = __ps_process_mime(reader, mime);
 			_LOGD("mime processing\n");
 		} else if (!strcmp(ASCII(node), "subapp")) {
@@ -512,21 +661,16 @@ static int __ps_process_appsvc(xmlTextReaderPtr reader, appsvc_x *appsvc)
 				return -1;
 			}
 			memset(subapp, '\0', sizeof(subapp_x));
-			LISTADD(appsvc->subapp, subapp);
+			appsvc->subapp = g_list_append(appsvc->subapp, subapp);
 			ret = __ps_process_subapp(reader, subapp);
 			_LOGD("subapp processing\n");
 		} else
-			return -1;
+			continue;
 		if (ret < 0) {
 			_LOGD("Processing appsvc failed\n");
 			return ret;
 		}
 	}
-
-	SAFE_LISTHEAD(appsvc->operation, tmp1);
-	SAFE_LISTHEAD(appsvc->uri, tmp2);
-	SAFE_LISTHEAD(appsvc->mime, tmp3);
-	SAFE_LISTHEAD(appsvc->subapp, tmp4);
 
 	__save_xml_value(reader, &appsvc->text);
 
@@ -534,12 +678,11 @@ static int __ps_process_appsvc(xmlTextReaderPtr reader, appsvc_x *appsvc)
 }
 
 
-static int __ps_process_privileges(xmlTextReaderPtr reader, privileges_x *privileges)
+static int __ps_process_privileges(xmlTextReaderPtr reader, manifest_x* mfx)
 {
 	const xmlChar *node;
 	int ret = -1;
 	int depth = -1;
-	privilege_x *tmp1 = NULL;
 
 	depth = xmlTextReaderDepth(reader);
 	while ((ret = __next_child_element(reader, depth))) {
@@ -550,14 +693,7 @@ static int __ps_process_privileges(xmlTextReaderPtr reader, privileges_x *privil
 		}
 
 		if (strcmp(ASCII(node), "privilege") == 0) {
-			privilege_x *privilege = malloc(sizeof(privilege_x));
-			if (privilege == NULL) {
-				_LOGD("Malloc Failed\n");
-				return -1;
-			}
-			memset(privilege, '\0', sizeof(privilege_x));
-			LISTADD(privileges->privilege, privilege);
-			ret = __ps_process_privilege(reader, privilege);
+			ret = __ps_process_privilege(reader, mfx);
 		} else
 			return -1;
 		if (ret < 0) {
@@ -565,7 +701,6 @@ static int __ps_process_privileges(xmlTextReaderPtr reader, privileges_x *privil
 			return ret;
 		}
 	}
-	SAFE_LISTHEAD(privileges->privilege, tmp1);
 	return ret;
 }
 
@@ -574,7 +709,6 @@ static int __ps_process_launchconditions(xmlTextReaderPtr reader, launchconditio
 	const xmlChar *node;
 	int ret = -1;
 	int depth = -1;
-	condition_x *tmp1 = NULL;
 
 	depth = xmlTextReaderDepth(reader);
 	while ((ret = __next_child_element(reader, depth))) {
@@ -591,7 +725,7 @@ static int __ps_process_launchconditions(xmlTextReaderPtr reader, launchconditio
 				return -1;
 			}
 			memset(condition, '\0', sizeof(condition_x));
-			LISTADD(launchconditions->condition, condition);
+			launchconditions->condition = g_list_append(launchconditions->condition, condition);
 			ret = __ps_process_condition(reader, condition);
 		} else
 			return -1;
@@ -600,8 +734,6 @@ static int __ps_process_launchconditions(xmlTextReaderPtr reader, launchconditio
 			return ret;
 		}
 	}
-
-	SAFE_LISTHEAD(launchconditions->condition, tmp1);
 
 	__save_xml_value(reader, &launchconditions->text);
 
@@ -613,8 +745,6 @@ static int __ps_process_datashare(xmlTextReaderPtr reader, datashare_x *datashar
 	const xmlChar *node;
 	int ret = -1;
 	int depth = -1;
-	define_x *tmp1 = NULL;
-	request_x *tmp2 = NULL;
 	depth = xmlTextReaderDepth(reader);
 	while ((ret = __next_child_element(reader, depth))) {
 		node = xmlTextReaderConstName(reader);
@@ -630,7 +760,7 @@ static int __ps_process_datashare(xmlTextReaderPtr reader, datashare_x *datashar
 				return -1;
 			}
 			memset(define, '\0', sizeof(define_x));
-			LISTADD(datashare->define, define);
+			datashare->define = g_list_append(datashare->define, define);
 			ret = __ps_process_define(reader, define);
 		} else if (!strcmp(ASCII(node), "request")) {
 			request_x *request= malloc(sizeof(request_x));
@@ -639,7 +769,7 @@ static int __ps_process_datashare(xmlTextReaderPtr reader, datashare_x *datashar
 				return -1;
 			}
 			memset(request, '\0', sizeof(request_x));
-			LISTADD(datashare->request, request);
+			datashare->request = g_list_append(datashare->request, request);
 			ret = __ps_process_request(reader, request);
 		} else
 			return -1;
@@ -649,8 +779,6 @@ static int __ps_process_datashare(xmlTextReaderPtr reader, datashare_x *datashar
 		}
 	}
 
-	SAFE_LISTHEAD(datashare->define, tmp1);
-	SAFE_LISTHEAD(datashare->request, tmp2);
 
 	return ret;
 }
@@ -687,6 +815,8 @@ __get_icon_with_path(const char* icon)
 		snprintf(icon_with_path, len, "/opt/usr/apps/%s/shared/res/icons/default/small/%s", package, icon);
 		do {
 			if (access(icon_with_path, R_OK) == 0) break;
+			snprintf(icon_with_path, len, "/opt/usr/apps/%s/shared/res/%s", package, icon);
+			if (access(icon_with_path, R_OK) == 0) break;
 			snprintf(icon_with_path, len, "/opt/share/icons/%s/small/%s", theme, icon);
 			if (access(icon_with_path, R_OK) == 0) break;
 			snprintf(icon_with_path, len, "/usr/share/icons/%s/small/%s", theme, icon);
@@ -697,6 +827,8 @@ __get_icon_with_path(const char* icon)
 			if (access(icon_with_path, R_OK) == 0) break;
 
 			/* icon path is going to be moved intto the app directory */
+			snprintf(icon_with_path, len, "/usr/apps/%s/shared/res/%s", package, icon);
+			if (access(icon_with_path, R_OK) == 0) break;
 			snprintf(icon_with_path, len, "/usr/apps/%s/shared/res/icons/default/small/%s", package, icon);
 			if (access(icon_with_path, R_OK) == 0) break;
 			snprintf(icon_with_path, len, "/opt/apps/%s/res/icons/%s/small/%s", package, theme, icon);
@@ -748,24 +880,24 @@ static void __ps_process_tag(manifest_x * mfx, char *const tagv[])
 		/*check tag :  preload */
 		if (ret_result && strcmp(ret_result, "preload") == 0) {
 			ret_result = strtok(NULL, delims);
-			if (strcmp(ret_result, "true") == 0) {
+			if (ret_result && strcmp(ret_result, "true") == 0) {
 				FREE_AND_NULL(mfx->preload);
 				mfx->preload = strdup("true");
-			} else if (strcmp(ret_result, "false") == 0) {
+			} else if (ret_result && strcmp(ret_result, "false") == 0) {
 				FREE_AND_NULL(mfx->preload);
 				mfx->preload = strdup("false");
 			}
-		/*check tag :  removable*/
+			/*check tag :  removable*/
 		} else if (ret_result && strcmp(ret_result, "removable") == 0) {
 			ret_result = strtok(NULL, delims);
-			if (strcmp(ret_result, "true") == 0){
+			if (ret_result && strcmp(ret_result, "true") == 0){
 				FREE_AND_NULL(mfx->removable);
 				mfx->removable = strdup("true");
-			} else if (strcmp(ret_result, "false") == 0) {
+			} else if (ret_result && strcmp(ret_result, "false") == 0) {
 				FREE_AND_NULL(mfx->removable);
 				mfx->removable = strdup("false");
 			}
-		/*check tag :  not matched*/
+			/*check tag :  not matched*/
 		} else
 			_LOGD("tag process [%s]is not defined\n", ret_result);
 
@@ -776,9 +908,11 @@ static void __ps_process_tag(manifest_x * mfx, char *const tagv[])
 			tag = strdup(tagv[i]);
 		else {
 			/*update tag :	system*/
-			if (mfx->preload && (strcmp(mfx->preload,"true")==0) && (strcmp(mfx->removable,"false")==0)){
-				FREE_AND_NULL(mfx->system);
-				mfx->system = strdup("true");
+			if (mfx->preload && mfx->removable) {
+				if ((strcmp(mfx->preload, "true")==0) && (strcmp(mfx->removable, "false")==0)){
+					FREE_AND_NULL(mfx->system);
+					mfx->system = strdup("true");
+				}
 			}
 			_LOGD("tag process success...\n");
 			return;
@@ -854,12 +988,13 @@ static int __ps_process_license(xmlTextReaderPtr reader, license_x *license)
 	return 0;
 }
 
+#if 0
+//Function is not used anywhere
 static int __ps_process_capability(xmlTextReaderPtr reader, capability_x *capability)
 {
 	const xmlChar *node;
 	int ret = -1;
 	int depth = -1;
-	resolution_x *tmp1 = NULL;
 
 	__save_xml_attribute(reader, "operation-id", &capability->operationid, NULL);
 
@@ -878,7 +1013,7 @@ static int __ps_process_capability(xmlTextReaderPtr reader, capability_x *capabi
 				return -1;
 			}
 			memset(resolution, '\0', sizeof(resolution_x));
-			LISTADD(capability->resolution, resolution);
+			capability->resolution = g_list_append(capability->resolution, resolution);
 			ret = __ps_process_resolution(reader, resolution);
 		} else
 			return -1;
@@ -888,10 +1023,9 @@ static int __ps_process_capability(xmlTextReaderPtr reader, capability_x *capabi
 		}
 	}
 
-	SAFE_LISTHEAD(capability->resolution, tmp1);
-
 	return ret;
 }
+#endif
 
 static int __ps_process_datacontrol(xmlTextReaderPtr reader, datacontrol_x *datacontrol)
 {
@@ -907,22 +1041,10 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 	const xmlChar *node;
 	int ret = -1;
 	int depth = -1;
-	label_x *tmp1 = NULL;
-	icon_x *tmp2 = NULL;
-	appsvc_x *tmp3 = NULL;
-	launchconditions_x *tmp4 = NULL;
-	notification_x *tmp5 = NULL;
-	datashare_x *tmp6 = NULL;
-	category_x *tmp7 = NULL;
-	metadata_x *tmp8 = NULL;
-	image_x *tmp9 = NULL;
-	permission_x *tmp10 = NULL;
-	datacontrol_x *tmp11 = NULL;
 
 	__save_xml_attribute(reader, "appid", &uiapplication->appid, NULL);
 	retvm_if(uiapplication->appid == NULL, PM_PARSER_R_ERROR, "appid cant be NULL, appid field is mandatory\n");
 	__save_xml_attribute(reader, "exec", &uiapplication->exec, NULL);
-	__save_xml_attribute(reader, "ambient-support", &uiapplication->ambient_support, "false");
 	__save_xml_attribute(reader, "nodisplay", &uiapplication->nodisplay, "false");
 	__save_xml_attribute(reader, "multiple", &uiapplication->multiple, "false");
 	__save_xml_attribute(reader, "type", &uiapplication->type, NULL);
@@ -952,18 +1074,25 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 	__save_xml_attribute(reader, "multi-instance", &uiapplication->multi_instance, "false");
 	__save_xml_attribute(reader, "multi-instance-mainid", &uiapplication->multi_instance_mainid, NULL);
 	__save_xml_attribute(reader, "ui-gadget", &uiapplication->ui_gadget, "false");
+	__save_xml_attribute(reader, "launch_mode", &uiapplication->launch_mode, "single");
+
+	//set defaut value
 	uiapplication->multi_window = strdup("false");
+	uiapplication->companion_type = strdup("false");
 	uiapplication->package= strdup(package);
+	uiapplication->support_feature = strdup("0");
+	uiapplication->support_category = strdup("0");
+	uiapplication->support_mode = strdup("0");
 
 	/*hw-acceleration values are changed from use-GL/not-use-GL/use-system-setting to on/off/default*/
 	if (strcmp(uiapplication->hwacceleration, "use-GL") == 0) {
-		free(uiapplication->hwacceleration);
+		free((void *)uiapplication->hwacceleration);
 		uiapplication->hwacceleration = strdup("on");
 	} else if (strcmp(uiapplication->hwacceleration, "not-use-GL") == 0) {
-		free(uiapplication->hwacceleration);
+		free((void *)uiapplication->hwacceleration);
 		uiapplication->hwacceleration = strdup("off");
 	} else if (strcmp(uiapplication->hwacceleration, "use-system-setting") == 0) {
-		free(uiapplication->hwacceleration);
+		free((void *)uiapplication->hwacceleration);
 		uiapplication->hwacceleration = strdup("default");
 	}
 
@@ -981,8 +1110,8 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(label, '\0', sizeof(label_x));
-			LISTADD(uiapplication->label, label);
 			ret = __ps_process_label(reader, label);
+			uiapplication->label = g_list_append(uiapplication->label, label);
 		} else if (!strcmp(ASCII(node), "icon")) {
 			icon_x *icon = malloc(sizeof(icon_x));
 			if (icon == NULL) {
@@ -990,7 +1119,7 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(icon, '\0', sizeof(icon_x));
-			LISTADD(uiapplication->icon, icon);
+			uiapplication->icon = g_list_append(uiapplication->icon, icon);
 			ret = __ps_process_icon(reader, icon);
 		} else if (!strcmp(ASCII(node), "image")) {
 			image_x *image = malloc(sizeof(image_x));
@@ -999,7 +1128,7 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(image, '\0', sizeof(image_x));
-			LISTADD(uiapplication->image, image);
+			uiapplication->image = g_list_append(uiapplication->image, image);
 			ret = __ps_process_image(reader, image);
 		} else if (!strcmp(ASCII(node), "category")) {
 			category_x *category = malloc(sizeof(category_x));
@@ -1008,8 +1137,9 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(category, '\0', sizeof(category_x));
-			LISTADD(uiapplication->category, category);
+			uiapplication->category= g_list_append(uiapplication->category, category);
 			ret = __ps_process_category(reader, category);
+			__save_xml_support_category(category->name, uiapplication);
 		} else if (!strcmp(ASCII(node), "metadata")) {
 			metadata_x *metadata = malloc(sizeof(metadata_x));
 			if (metadata == NULL) {
@@ -1017,13 +1147,11 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(metadata, '\0', sizeof(metadata_x));
-			LISTADD(uiapplication->metadata, metadata);
+			uiapplication->metadata = g_list_append(uiapplication->metadata, metadata);
 			ret = __ps_process_metadata(reader, metadata);
-			// multiwindow check
-			if (strcmp(metadata->key, "http://developer.samsung.com/tizen/metadata/multiwindow") == 0)
-				FREE_AND_STRDUP("true", uiapplication->multi_window);
 
-			__save_xml_supportfeature(metadata->key, uiapplication);
+			__save_xml_metadata(metadata, uiapplication);
+			__save_xml_support_feature(metadata->key, uiapplication);
 		} else if (!strcmp(ASCII(node), "permission")) {
 			permission_x *permission = malloc(sizeof(permission_x));
 			if (permission == NULL) {
@@ -1031,7 +1159,7 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(permission, '\0', sizeof(permission_x));
-			LISTADD(uiapplication->permission, permission);
+			uiapplication->permission = g_list_append(uiapplication->permission, permission);
 			ret = __ps_process_permission(reader, permission);
 		} else if (!strcmp(ASCII(node), "application-service")) {
 			appsvc_x *appsvc = malloc(sizeof(appsvc_x));
@@ -1040,7 +1168,7 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(appsvc, '\0', sizeof(appsvc_x));
-			LISTADD(uiapplication->appsvc, appsvc);
+			uiapplication->appsvc = g_list_append(uiapplication->appsvc, appsvc);
 			ret = __ps_process_appsvc(reader, appsvc);
 		} else if (!strcmp(ASCII(node), "app-control")) {
 			appsvc_x *appsvc = malloc(sizeof(appsvc_x));
@@ -1049,7 +1177,7 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(appsvc, '\0', sizeof(appsvc_x));
-			LISTADD(uiapplication->appsvc, appsvc);
+			uiapplication->appsvc = g_list_append(uiapplication->appsvc, appsvc);
 			ret = __ps_process_appsvc(reader, appsvc);
 		} else if (!strcmp(ASCII(node), "data-share")) {
 			datashare_x *datashare = malloc(sizeof(datashare_x));
@@ -1058,7 +1186,7 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(datashare, '\0', sizeof(datashare_x));
-			LISTADD(uiapplication->datashare, datashare);
+			uiapplication->datashare = g_list_append(uiapplication->datashare, datashare);
 			ret = __ps_process_datashare(reader, datashare);
 		} else if (!strcmp(ASCII(node), "launch-conditions")) {
 			launchconditions_x *launchconditions = malloc(sizeof(launchconditions_x));
@@ -1067,7 +1195,7 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(launchconditions, '\0', sizeof(launchconditions_x));
-			LISTADD(uiapplication->launchconditions, launchconditions);
+			uiapplication->launchconditions = g_list_append(uiapplication->launchconditions, launchconditions);
 			ret = __ps_process_launchconditions(reader, launchconditions);
 		} else if (!strcmp(ASCII(node), "notification")) {
 			notification_x *notification = malloc(sizeof(notification_x));
@@ -1076,7 +1204,7 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(notification, '\0', sizeof(notification_x));
-			LISTADD(uiapplication->notification, notification);
+			uiapplication->notification = g_list_append(uiapplication->notification, notification);
 			ret = __ps_process_notification(reader, notification);
 		} else if (!strcmp(ASCII(node), "datacontrol")) {
 			datacontrol_x *datacontrol = malloc(sizeof(datacontrol_x));
@@ -1085,27 +1213,29 @@ static int __ps_process_uiapplication(xmlTextReaderPtr reader, uiapplication_x *
 				return -1;
 			}
 			memset(datacontrol, '\0', sizeof(datacontrol_x));
-			LISTADD(uiapplication->datacontrol, datacontrol);
+			uiapplication->datacontrol = g_list_append(uiapplication->datacontrol, datacontrol);
 			ret = __ps_process_datacontrol(reader, datacontrol);
+		} else if (!strcmp(ASCII(node), "background-category")) {
+			const char *background_category = NULL;
+			__save_xml_attribute(reader, "value", &background_category, NULL);
+			if (background_category != NULL)
+				uiapplication->background_category = g_list_append(uiapplication->background_category, (gpointer)background_category);
+		} else if (!strcmp(ASCII(node), "support-size")) {
+			/*temporary workaround code for widget-application. */
+			FREE_AND_STRDUP("true", uiapplication->nodisplay);
+			FREE_AND_STRDUP("false", uiapplication->multiple);
+			FREE_AND_STRDUP("capp", uiapplication->type);
+			FREE_AND_STRDUP("false", uiapplication->taskmanage);
+			FREE_AND_STRDUP("false", uiapplication->indicatordisplay);
+			FREE_AND_STRDUP("widgetapp", uiapplication->component_type);
 		} else
-			return -1;
+			_LOGD("not handling node[%s]", ASCII(node));
+
 		if (ret < 0) {
 			_LOGD("Processing uiapplication failed\n");
 			return ret;
 		}
 	}
-
-	SAFE_LISTHEAD(uiapplication->label, tmp1);
-	SAFE_LISTHEAD(uiapplication->icon, tmp2);
-	SAFE_LISTHEAD(uiapplication->appsvc, tmp3);
-	SAFE_LISTHEAD(uiapplication->launchconditions, tmp4);
-	SAFE_LISTHEAD(uiapplication->notification, tmp5);
-	SAFE_LISTHEAD(uiapplication->datashare, tmp6);
-	SAFE_LISTHEAD(uiapplication->category, tmp7);
-	SAFE_LISTHEAD(uiapplication->metadata, tmp8);
-	SAFE_LISTHEAD(uiapplication->image, tmp9);
-	SAFE_LISTHEAD(uiapplication->permission, tmp10);
-	SAFE_LISTHEAD(uiapplication->datacontrol, tmp11);
 
 	return ret;
 }
@@ -1147,19 +1277,6 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 	const xmlChar *node;
 	int ret = -1;
 	int depth = -1;
-	label_x *tmp1 = NULL;
-	author_x *tmp2 = NULL;
-	description_x *tmp3 = NULL;
-	license_x *tmp4 = NULL;
-	uiapplication_x *tmp5 = NULL;
-	daemon_x *tmp6 = NULL;
-	theme_x *tmp7 = NULL;
-	font_x *tmp8 = NULL;
-	ime_x *tmp9 = NULL;
-	icon_x *tmp10 = NULL;
-	compatibility_x *tmp11 = NULL;
-	deviceprofile_x *tmp12 = NULL;
-	privileges_x *tmp13 = NULL;
 
 	depth = xmlTextReaderDepth(reader);
 	while ((ret = __next_child_element(reader, depth))) {
@@ -1176,7 +1293,7 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(label, '\0', sizeof(label_x));
-			LISTADD(mfx->label, label);
+			mfx->label = g_list_append(mfx->label,label);
 			ret = __ps_process_label(reader, label);
 		} else if (!strcmp(ASCII(node), "author")) {
 			author_x *author = malloc(sizeof(author_x));
@@ -1185,7 +1302,7 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(author, '\0', sizeof(author_x));
-			LISTADD(mfx->author, author);
+			mfx->author = g_list_append(mfx->author, author);
 			ret = __ps_process_author(reader, author);
 		} else if (!strcmp(ASCII(node), "description")) {
 			description_x *description = malloc(sizeof(description_x));
@@ -1194,7 +1311,7 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(description, '\0', sizeof(description_x));
-			LISTADD(mfx->description, description);
+			mfx->description = g_list_append(mfx->description, description);
 			ret = __ps_process_description(reader, description);
 		} else if (!strcmp(ASCII(node), "license")) {
 			license_x *license = malloc(sizeof(license_x));
@@ -1203,17 +1320,10 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(license, '\0', sizeof(license_x));
-			LISTADD(mfx->license, license);
 			ret = __ps_process_license(reader, license);
+			mfx->license = g_list_append(mfx->license, license);
 		} else if (!strcmp(ASCII(node), "privileges")) {
-			privileges_x *privileges = malloc(sizeof(privileges_x));
-			if (privileges == NULL) {
-				_LOGD("Malloc Failed\n");
-				return -1;
-			}
-			memset(privileges, '\0', sizeof(privileges_x));
-			LISTADD(mfx->privileges, privileges);
-			ret = __ps_process_privileges(reader, privileges);
+			ret = __ps_process_privileges(reader, mfx);
 		} else if (!strcmp(ASCII(node), "ui-application")) {
 			uiapplication_x *uiapplication = malloc(sizeof(uiapplication_x));
 			if (uiapplication == NULL) {
@@ -1221,7 +1331,7 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(uiapplication, '\0', sizeof(uiapplication_x));
-			LISTADD(mfx->uiapplication, uiapplication);
+			mfx->uiapplication = g_list_append(mfx->uiapplication, uiapplication);
 			ret = __ps_process_uiapplication(reader, uiapplication);
 		} else if (!strcmp(ASCII(node), "service-application")) {
 			uiapplication_x *uiapplication = malloc(sizeof(uiapplication_x));
@@ -1230,50 +1340,41 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(uiapplication, '\0', sizeof(uiapplication_x));
-			LISTADD(mfx->uiapplication, uiapplication);
+			mfx->uiapplication = g_list_append(mfx->uiapplication, uiapplication);
 			ret = __ps_process_uiapplication(reader, uiapplication);
 			FREE_AND_STRDUP("svcapp", uiapplication->component_type);
+		} else if (!strcmp(ASCII(node), "widget-application")) {
+			_LOGD("handling widget-application");
+			uiapplication_x *uiapplication = malloc(sizeof(uiapplication_x));
+			if (uiapplication == NULL) {
+				_LOGE("Malloc Failed\n");
+				return -1;
+			}
+			memset(uiapplication, '\0', sizeof(uiapplication_x));
+			mfx->uiapplication = g_list_append(mfx->uiapplication, uiapplication);
+			ret = __ps_process_uiapplication(reader, uiapplication);
 		} else if (!strcmp(ASCII(node), "watch-application")) {
-			category_x *tmp_category;
-			int watch_category_set = 0;
-
 			uiapplication_x *uiapplication = malloc(sizeof(uiapplication_x));
 			if (uiapplication == NULL) {
 				_LOGD("Malloc Failed\n");
 				return -1;
 			}
 			memset(uiapplication, '\0', sizeof(uiapplication_x));
-			LISTADD(mfx->uiapplication, uiapplication);
+			mfx->uiapplication = g_list_append(mfx->uiapplication, uiapplication);
 			ret = __ps_process_uiapplication(reader, uiapplication);
 			FREE_AND_STRDUP("watchapp", uiapplication->component_type);
 			FREE_AND_STRDUP("true", uiapplication->nodisplay);
 			FREE_AND_STRDUP("false", uiapplication->taskmanage);
 			if (uiapplication->type == NULL)
 				FREE_AND_STRDUP("capp", uiapplication->type);
-
-			for (tmp_category = uiapplication->category;
-				tmp_category != NULL;
-				tmp_category = tmp_category->next)
-			{
-				if (strcmp(tmp_category->name,
-						WATCH_CLOCK_CATEGORY) == 0) {
-					watch_category_set = 1;
-					break;
-				}
+			category_x *category = malloc(sizeof(category_x));
+			if (category == NULL) {
+				_LOGD("Malloc Failed\n");
+				return -1;
 			}
-
-			if (watch_category_set == 0) {
-				category_x *category = malloc(sizeof(category_x));
-				if (category == NULL) {
-					_LOGD("Malloc Failed\n");
-					return -1;
-				}
-				memset(category, '\0', sizeof(category_x));
-				LISTADD(uiapplication->category, category);
-				category->name = strdup(WATCH_CLOCK_CATEGORY);
-			}
-
-			SAFE_LISTHEAD(uiapplication->category, tmp_category);
+			memset(category, '\0', sizeof(category_x));
+			uiapplication->category = g_list_append(uiapplication->category, category);
+			category->name = strdup(WATCH_CLOCK_CATEGORY);
 		} else if (!strcmp(ASCII(node), "daemon")) {
 			daemon_x *daemon = malloc(sizeof(daemon_x));
 			if (daemon == NULL) {
@@ -1281,8 +1382,8 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(daemon, '\0', sizeof(daemon_x));
-			LISTADD(mfx->daemon, daemon);
 			ret = __ps_process_daemon(reader, daemon);
+			mfx->daemon = g_list_append(mfx->daemon,daemon);
 		} else if (!strcmp(ASCII(node), "theme")) {
 			theme_x *theme = malloc(sizeof(theme_x));
 			if (theme == NULL) {
@@ -1290,8 +1391,8 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(theme, '\0', sizeof(theme_x));
-			LISTADD(mfx->theme, theme);
 			ret = __ps_process_theme(reader, theme);
+			mfx->theme = g_list_append(mfx->theme,theme);
 		} else if (!strcmp(ASCII(node), "font")) {
 			font_x *font = malloc(sizeof(font_x));
 			if (font == NULL) {
@@ -1299,8 +1400,8 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(font, '\0', sizeof(font_x));
-			LISTADD(mfx->font, font);
 			ret = __ps_process_font(reader, font);
+			mfx->font = g_list_append(mfx->font,font);
 		} else if (!strcmp(ASCII(node), "ime")) {
 			ime_x *ime = malloc(sizeof(ime_x));
 			if (ime == NULL) {
@@ -1308,8 +1409,8 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(ime, '\0', sizeof(ime_x));
-			LISTADD(mfx->ime, ime);
 			ret = __ps_process_ime(reader, ime);
+			mfx->ime = g_list_append(mfx->ime,ime);
 		} else if (!strcmp(ASCII(node), "icon")) {
 			icon_x *icon = malloc(sizeof(icon_x));
 			if (icon == NULL) {
@@ -1317,7 +1418,7 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(icon, '\0', sizeof(icon_x));
-			LISTADD(mfx->icon, icon);
+			mfx->icon = g_list_append(mfx->icon, icon);
 			ret = __ps_process_icon(reader, icon);
 		} else if (!strcmp(ASCII(node), "profile")) {
 			deviceprofile_x *deviceprofile = malloc(sizeof(deviceprofile_x));
@@ -1326,8 +1427,8 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(deviceprofile, '\0', sizeof(deviceprofile_x));
-			LISTADD(mfx->deviceprofile, deviceprofile);
 			ret = __ps_process_deviceprofile(reader, deviceprofile);
+			mfx->deviceprofile = g_list_append(mfx->deviceprofile,deviceprofile);
 		} else if (!strcmp(ASCII(node), "compatibility")) {
 			compatibility_x *compatibility = malloc(sizeof(compatibility_x));
 			if (compatibility == NULL) {
@@ -1335,8 +1436,8 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 				return -1;
 			}
 			memset(compatibility, '\0', sizeof(compatibility_x));
-			LISTADD(mfx->compatibility, compatibility);
 			ret = __ps_process_compatibility(reader, compatibility);
+			mfx->compatibility = g_list_append(mfx->compatibility,compatibility);
 		} else if (!strcmp(ASCII(node), "shortcut-list")) {
 			continue;
 		} else if (!strcmp(ASCII(node), "livebox")) {	/**< @todo will be deprecated soon */
@@ -1349,28 +1450,16 @@ static int __start_process(xmlTextReaderPtr reader, manifest_x * mfx)
 			continue;
 		} else if (!strcmp(ASCII(node), "ime")) {
 			continue;
+		} else if (!strcmp(ASCII(node), "watchface")) {
+			continue;
 		} else
-			return -1;
+			continue;
 
 		if (ret < 0) {
 			_LOGD("Processing manifest failed\n");
 			return ret;
 		}
 	}
-
-	SAFE_LISTHEAD(mfx->label, tmp1);
-	SAFE_LISTHEAD(mfx->author, tmp2);
-	SAFE_LISTHEAD(mfx->description, tmp3);
-	SAFE_LISTHEAD(mfx->license, tmp4);
-	SAFE_LISTHEAD(mfx->uiapplication, tmp5);
-	SAFE_LISTHEAD(mfx->daemon, tmp6);
-	SAFE_LISTHEAD(mfx->theme, tmp7);
-	SAFE_LISTHEAD(mfx->font, tmp8);
-	SAFE_LISTHEAD(mfx->ime, tmp9);
-	SAFE_LISTHEAD(mfx->icon, tmp10);
-	SAFE_LISTHEAD(mfx->compatibility, tmp11);
-	SAFE_LISTHEAD(mfx->deviceprofile, tmp12);
-	SAFE_LISTHEAD(mfx->privileges, tmp13);
 
 	return ret;
 }
@@ -1379,19 +1468,25 @@ static int __process_manifest(xmlTextReaderPtr reader, manifest_x * mfx)
 {
 	const xmlChar *node;
 	int ret = -1;
+	char* default_version = NULL;
 
 	if ((ret = __next_child_element(reader, -1))) {
 		node = xmlTextReaderConstName(reader);
 		retvm_if(!node, PM_PARSER_R_ERROR, "xmlTextReaderConstName value is NULL\n");
 
 		if (!strcmp(ASCII(node), "manifest")) {
+			if (__get_patch_trimmed_api_version(TIZEN_FULL_VERSION, &default_version) < 0) {
+				_LOGE("failed to get patch-trimmed api-version");
+				return -1;
+			}
+
 			__save_xml_attribute(reader, "xmlns", &mfx->ns, NULL);
 			__save_xml_attribute(reader, "package", &mfx->package, NULL);
-			retvm_if(mfx->package == NULL, PM_PARSER_R_ERROR, "package cant be NULL, package field is mandatory\n");
+			tryvm_if(mfx->package == NULL, PM_PARSER_R_ERROR, "package cant be NULL, package field is mandatory\n");
 			__save_xml_attribute(reader, "version", &mfx->version, NULL);
 			__save_xml_attribute(reader, "size", &mfx->package_size, NULL);
 			__save_xml_attribute(reader, "install-location", &mfx->installlocation, "internal-only");
-			__save_xml_attribute(reader, "type", &mfx->type, NULL);
+			__save_xml_attribute(reader, "type", &mfx->type, "rpm");
 			__save_xml_attribute(reader, "root_path", &mfx->root_path, NULL);
 			__save_xml_attribute(reader, "csc_path", &mfx->csc_path, NULL);
 			__save_xml_attribute(reader, "appsetting", &mfx->appsetting, "false");
@@ -1400,25 +1495,26 @@ static int __process_manifest(xmlTextReaderPtr reader, manifest_x * mfx)
 			__save_xml_attribute(reader, "url", &mfx->package_url, NULL);
 			__save_xml_attribute(reader, "support-disable", &mfx->support_disable, "false");
 			__save_xml_attribute(reader, "mother-package", &mfx->mother_package, "false");
+			__save_xml_attribute(reader, "api-version", &mfx->api_version, default_version);
+			__save_xml_attribute(reader, "backend-installer", &mfx->backend_installer, NULL);
+			__save_xml_attribute(reader, "smack-label", &mfx->custom_smack_label, NULL);
 
-			/* need to check */
-			if (xmlTextReaderGetAttribute(reader, XMLCHAR("support-reset"))) {
-				mfx->support_reset = ASCII(xmlTextReaderGetAttribute(reader, XMLCHAR("support-reset")));
-				mfx->use_reset = strdup("false");
-			} else {
-				mfx->use_reset = strdup("true");
-			}
+			__save_xml_support_mode(reader, mfx);
+			__save_xml_installed_time(mfx);
+			__save_xml_root_path(mfx);
+			__save_xml_default_value(mfx);
 
-			__save_xml_supportmode(reader, mfx);
-			__save_xml_installedtime(mfx);
-			__save_xml_defaultvalue(mfx);
-
+			FREE_AND_NULL(default_version);
 			ret = __start_process(reader, mfx);
 		} else {
 			_LOGD("No Manifest element found\n");
 			return -1;
 		}
 	}
+	return ret;
+
+catch:
+	FREE_AND_NULL(default_version);
 	return ret;
 }
 
@@ -1441,56 +1537,6 @@ static char* __convert_to_system_locale(const char *mlocale)
 	return locale;
 }
 
-static int __ail_change_info(int op, const char *appid)
-{
-	void *lib_handle = NULL;
-	int (*ail_desktop_operation) (const char *);
-	char *aop = NULL;
-	int ret = 0;
-
-	if ((lib_handle = dlopen(LIBAIL_PATH, RTLD_LAZY)) == NULL) {
-		_LOGE("dlopen is failed LIBAIL_PATH[%s]\n", LIBAIL_PATH);
-		goto END;
-	}
-
-
-	switch (op) {
-		case 0:
-			aop  = "ail_desktop_add";
-			break;
-		case 1:
-			aop  = "ail_desktop_update";
-			break;
-		case 2:
-			aop  = "ail_desktop_remove";
-			break;
-		case 3:
-			aop  = "ail_desktop_clean";
-			break;
-		case 4:
-			aop  = "ail_desktop_fota";
-			break;
-		default:
-			goto END;
-			break;
-	}
-
-	if ((ail_desktop_operation =
-	     dlsym(lib_handle, aop)) == NULL || dlerror() != NULL) {
-		_LOGE("can not find symbol \n");
-		goto END;
-	}
-
-	ret = ail_desktop_operation(appid);
-
-END:
-	if (lib_handle)
-		dlclose(lib_handle);
-
-	return ret;
-}
-
-
 /* desktop shoud be generated automatically based on manifest */
 /* Currently removable, taskmanage, etc fields are not considerd. it will be decided soon.*/
 static int __ps_make_nativeapp_desktop(manifest_x * mfx, const char *manifest, ACTION_TYPE action)
@@ -1501,6 +1547,10 @@ static int __ps_make_nativeapp_desktop(manifest_x * mfx, const char *manifest, A
         char *buf = NULL;
 	char *buftemp = NULL;
 	char *locale = NULL;
+	GList *ui_label = NULL;
+	label_x* label = NULL;
+	uiapplication_x *up = NULL;
+	GList *list_up = NULL;
 
 	buf = (char *)calloc(1, BUFMAX);
 	if (!buf) {
@@ -1515,24 +1565,13 @@ static int __ps_make_nativeapp_desktop(manifest_x * mfx, const char *manifest, A
 		return -1;
 	}
 
-	if (action == ACTION_UPGRADE)
-		__ail_change_info(AIL_CLEAN, mfx->package);
 
-	for(; mfx->uiapplication; mfx->uiapplication=mfx->uiapplication->next) {
-
-		if (manifest != NULL) {
-			/* skip making a deskfile and update ail, if preload app is updated */
-			if(strstr(manifest, MANIFEST_RO_PREFIX)) {
-				__ail_change_info(AIL_INSTALL, mfx->uiapplication->appid);
-	            _LOGE("preload app is update : skip and update ail : %s", manifest);
-				continue;
-			}
-		}
-
+	for(list_up = mfx->uiapplication; list_up; list_up = list_up->next) {
+		up = (uiapplication_x *)list_up->data;
 		if(mfx->readonly && !strcasecmp(mfx->readonly, "True"))
-			snprintf(filepath, sizeof(filepath),"%s%s.desktop", DESKTOP_RO_PATH, mfx->uiapplication->appid);
+			snprintf(filepath, sizeof(filepath),"%s%s.desktop", DESKTOP_RO_PATH, up->appid);
 		else
-			snprintf(filepath, sizeof(filepath),"%s%s.desktop", DESKTOP_RW_PATH, mfx->uiapplication->appid);
+			snprintf(filepath, sizeof(filepath),"%s%s.desktop", DESKTOP_RW_PATH, up->appid);
 
 		/* skip if desktop exists
 		if (access(filepath, R_OK) == 0)
@@ -1550,23 +1589,22 @@ static int __ps_make_nativeapp_desktop(manifest_x * mfx, const char *manifest, A
 
 	        snprintf(buf, BUFMAX, "[Desktop Entry]\n");
 	        fwrite(buf, 1, strlen(buf), file);
-
-		for( ; mfx->uiapplication->label ; mfx->uiapplication->label = mfx->uiapplication->label->next) {
-			if(!strcmp(mfx->uiapplication->label->lang, DEFAULT_LOCALE)) {
-				snprintf(buf, BUFMAX, "Name=%s\n",	mfx->uiapplication->label->text);
-			} else {
-				locale = __convert_to_system_locale(mfx->uiapplication->label->lang);
-				snprintf(buf, BUFMAX, "Name[%s]=%s\n", locale,
-					mfx->uiapplication->label->text);
-				FREE_AND_NULL(locale);
+		ui_label = up->label;
+		for( ; ui_label ; ui_label = ui_label->next) {
+			label = (label_x*)ui_label->data;
+			if(label){
+				if(!strcmp(label->lang, DEFAULT_LOCALE)) {
+					snprintf(buf, BUFMAX, "Name=%s\n",label->text);
+				} else {
+					locale = __convert_to_system_locale(label->lang);
+					snprintf(buf, BUFMAX, "Name[%s]=%s\n", locale,
+					label->text);
+					FREE_AND_NULL(locale);
+				}
 			}
 	        	fwrite(buf, 1, strlen(buf), file);
 		}
 
-		if(mfx->uiapplication->label && mfx->uiapplication->label->text) {
-		        snprintf(buf, BUFMAX, "Name=%s\n", mfx->uiapplication->label->text);
-	        	fwrite(buf, 1, strlen(buf), file);
-		}
 /*
 		else if(mfx->label && mfx->label->text) {
 			snprintf(buf, BUFMAX, "Name=%s\n", mfx->label->text);
@@ -1581,43 +1619,49 @@ static int __ps_make_nativeapp_desktop(manifest_x * mfx, const char *manifest, A
 	        snprintf(buf, BUFMAX, "Type=Application\n");
 	        fwrite(buf, 1, strlen(buf), file);
 
-		if(mfx->uiapplication->exec) {
-		        snprintf(buf, BUFMAX, "Exec=%s\n", mfx->uiapplication->exec);
+		if(up->exec) {
+		        snprintf(buf, BUFMAX, "Exec=%s\n", up->exec);
 		        fwrite(buf, 1, strlen(buf), file);
 		}
 
-		if(mfx->uiapplication->icon && mfx->uiapplication->icon->text) {
-		        snprintf(buf, BUFMAX, "Icon=%s\n", mfx->uiapplication->icon->text);
+		if(up->icon && (char*)((icon_x*)up->icon->data)->text) {
+		        snprintf(buf, BUFMAX, "Icon=%s\n", (char*)((icon_x*)up->icon->data)->text);
 		        fwrite(buf, 1, strlen(buf), file);
-		} else if(mfx->icon && mfx->icon->text) {
-		        snprintf(buf, BUFMAX, "Icon=%s\n", mfx->icon->text);
+		} else if(mfx->icon && (char*)((icon_x*)mfx->icon->data)->text) {
+		        snprintf(buf, BUFMAX, "Icon=%s\n", (char*)((icon_x*)mfx->icon->data)->text);
 		        fwrite(buf, 1, strlen(buf), file);
 		}
 
 		// MIME types
-		if(mfx->uiapplication && mfx->uiapplication->appsvc) {
-			appsvc_x *asvc = mfx->uiapplication->appsvc;
+		if(up && up->appsvc) {
+			appsvc_x *asvc = NULL;
+			GList *list_asvc = up->appsvc;
 			mime_x *mi = NULL;
+			GList *list_mime = NULL;
 			const char *mime = NULL;
 			const char *mime_delim = "; ";
 			int mime_count = 0;
 
 			strncpy(buf, "MimeType=", BUFMAX-1);
-			while (asvc) {
-				mi = asvc->mime;
-				while (mi) {
+			while (list_asvc) {
+				asvc = (appsvc_x *)list_asvc->data;
+				list_mime = asvc->mime;
+				while (list_mime) {
 					mime_count++;
-					mime = mi->name;
-					_LOGD("MIME type: %s\n", mime);
-					strncat(buf, mime, BUFMAX-strlen(buf)-1);
-					if(mi->next) {
+					mi = (mime_x *)list_mime->data;
+					if(mi && mi->name) {
+						mime = mi->name;
+						_LOGD("MIME type: %s\n", mime);
+						strncat(buf, mime, BUFMAX-strlen(buf)-1);
+					}
+					if(list_mime->next) {
 						strncat(buf, mime_delim, BUFMAX-strlen(buf)-1);
 					}
 
-					mi = mi->next;
+					list_mime = list_mime->next;
 					mime = NULL;
 				}
-				asvc = asvc->next;
+				list_asvc = list_asvc->next;
 			}
 			_LOGD("MIME types: buf[%s]\n", buf);
 			_LOGD("MIME count: %d\n", mime_count);
@@ -1630,38 +1674,38 @@ static int __ps_make_nativeapp_desktop(manifest_x * mfx, const char *manifest, A
 		        fwrite(buf, 1, strlen(buf), file);
 		}
 
-		if(mfx->uiapplication->nodisplay) {
-			snprintf(buf, BUFMAX, "NoDisplay=%s\n", mfx->uiapplication->nodisplay);
+		if(up->nodisplay) {
+			snprintf(buf, BUFMAX, "NoDisplay=%s\n", up->nodisplay);
 			fwrite(buf, 1, strlen(buf), file);
 		}
 
-		if(mfx->uiapplication->categories) {
-			snprintf(buf, BUFMAX, "Categories=%s\n", mfx->uiapplication->categories);
+		if(up->categories) {
+			snprintf(buf, BUFMAX, "Categories=%s\n", up->categories);
 			fwrite(buf, 1, strlen(buf), file);
 		}
 
-		if(mfx->uiapplication->taskmanage && !strcasecmp(mfx->uiapplication->taskmanage, "False")) {
+		if(up->taskmanage && !strcasecmp(up->taskmanage, "False")) {
 		        snprintf(buf, BUFMAX, "X-TIZEN-TaskManage=False\n");
 		        fwrite(buf, 1, strlen(buf), file);
 		}
 
-		if(mfx->uiapplication->enabled && !strcasecmp(mfx->uiapplication->enabled, "False")) {
+		if(up->enabled && !strcasecmp(up->enabled, "False")) {
 		        snprintf(buf, BUFMAX, "X-TIZEN-Enabled=False\n");
 		        fwrite(buf, 1, strlen(buf), file);
 		}
 
-		if(mfx->uiapplication->hwacceleration) {
-			snprintf(buf, BUFMAX, "Hw-Acceleration=%s\n", mfx->uiapplication->hwacceleration);
+		if(up->hwacceleration) {
+			snprintf(buf, BUFMAX, "Hw-Acceleration=%s\n", up->hwacceleration);
 			fwrite(buf, 1, strlen(buf), file);
 		}
 
-		if(mfx->uiapplication->multiple && !strcasecmp(mfx->uiapplication->multiple, "True")) {
+		if(up->multiple && !strcasecmp(up->multiple, "True")) {
 			snprintf(buf, BUFMAX, "X-TIZEN-Multiple=True\n");
 			fwrite(buf, 1, strlen(buf), file);
 		}
 
-		if(mfx->uiapplication->extraid) {
-			snprintf(buf, BUFMAX, "X-TIZEN-PackageID=%s\n", mfx->uiapplication->extraid);
+		if(up->extraid) {
+			snprintf(buf, BUFMAX, "X-TIZEN-PackageID=%s\n", up->extraid);
 			fwrite(buf, 1, strlen(buf), file);
 		}
 
@@ -1675,10 +1719,10 @@ static int __ps_make_nativeapp_desktop(manifest_x * mfx, const char *manifest, A
 			fwrite(buf, 1, strlen(buf), file);
 		}
 
-		if(mfx->uiapplication->submode && !strcasecmp(mfx->uiapplication->submode, "True")) {
-			snprintf(buf, BUFMAX, "X-TIZEN-Submode=%s\n", mfx->uiapplication->submode);
+		if(up->submode && !strcasecmp(up->submode, "True")) {
+			snprintf(buf, BUFMAX, "X-TIZEN-Submode=%s\n", up->submode);
 			fwrite(buf, 1, strlen(buf), file);
-			snprintf(buf, BUFMAX, "X-TIZEN-SubmodeMainid=%s\n", mfx->uiapplication->submode_mainid);
+			snprintf(buf, BUFMAX, "X-TIZEN-SubmodeMainid=%s\n", up->submode_mainid);
 			fwrite(buf, 1, strlen(buf), file);
 		}
 
@@ -1692,77 +1736,86 @@ static int __ps_make_nativeapp_desktop(manifest_x * mfx, const char *manifest, A
 //		snprintf(buf, BUFMAX, "X-TIZEN-PackageType=rpm\n");
 //		fwrite(buf, 1, strlen(buf), file);
 
-
-		if(mfx->uiapplication->appsvc) {
+		if(up->appsvc) {
 			snprintf(buf, BUFMAX, "X-TIZEN-Svc=");
 			_LOGD("buf[%s]\n", buf);
 
-
-			uiapplication_x *up = mfx->uiapplication;
 			appsvc_x *asvc = NULL;
+			GList *list_asvc = NULL;
 			operation_x *op = NULL;
+			GList *list_op = NULL;
 			mime_x *mi = NULL;
+			GList *list_mime = NULL;
 			uri_x *ui = NULL;
+			GList *list_uri = NULL;
 			subapp_x *sub = NULL;
+			GList *list_subapp = NULL;
 			const char *operation = NULL;
 			const char *mime = NULL;
 			const char *uri = NULL;
 			const char *subapp = NULL;
 			int i = 0;
 
-
-			asvc = up->appsvc;
-			while(asvc != NULL) {
-				op = asvc->operation;
-				while(op != NULL) {
-					if (op)
+			list_asvc = up->appsvc;
+			while(list_asvc != NULL) {
+				asvc = (appsvc_x *)list_asvc->data;
+				list_op = asvc->operation;
+				while(list_op != NULL) {
+					op = (operation_x *)list_op->data;
+					if (op && op->name)
 						operation = op->name;
-					mi = asvc->mime;
+					list_mime = asvc->mime;
 
-					do
-					{
-						if (mi)
-							mime = mi->name;
-						sub = asvc->subapp;
-						do
-						{
-							if (sub)
-								subapp = sub->name;
-							ui = asvc->uri;
-							do
-							{
-								if (ui)
-									uri = ui->name;
+					do{
+						if(list_mime){
+							mi = (mime_x *)list_mime->data;
+							if (mi)
+								mime = mi->name;
+						}
+
+						list_subapp = asvc->subapp;
+						do{
+							if(list_subapp){
+								sub = (subapp_x *)list_subapp->data;
+								if (sub)
+									subapp = sub->name;
+							}
+
+							list_uri = asvc->uri;
+							do{
+								if(list_uri){
+									ui = (uri_x *)list_uri->data;
+									if (ui)
+										uri = ui->name;
+								}
 
 								if(i++ > 0) {
 									strncpy(buftemp, buf, BUFMAX);
 									snprintf(buf, BUFMAX, "%s;", buftemp);
 								}
 
-
 								strncpy(buftemp, buf, BUFMAX);
 								snprintf(buf, BUFMAX, "%s%s|%s|%s|%s", buftemp, operation?operation:"NULL", uri?uri:"NULL", mime?mime:"NULL", subapp?subapp:"NULL");
 								_LOGD("buf[%s]\n", buf);
 
-								if (ui)
-									ui = ui->next;
+								if (list_uri)
+									list_uri = list_uri->next;
 								uri = NULL;
-							} while(ui != NULL);
-						if (sub)
-								sub = sub->next;
+							}while(list_uri != NULL);
+							if (list_subapp)
+								list_subapp = list_subapp->next;
 							subapp = NULL;
-						}while(sub != NULL);
-						if (mi)
-							mi = mi->next;
+						}while(list_subapp != NULL);
+						if (list_mime)
+							list_mime = list_mime->next;
 						mime = NULL;
-					}while(mi != NULL);
-					if (op)
-						op = op->next;
+					}while(list_mime != NULL);
+					if (list_op)
+						list_op = list_op->next;
 					operation = NULL;
 				}
-				asvc = asvc->next;
+				list_asvc = list_asvc->next;
 			}
-
 
 			fwrite(buf, 1, strlen(buf), file);
 
@@ -1775,10 +1828,6 @@ static int __ps_make_nativeapp_desktop(manifest_x * mfx, const char *manifest, A
 	        fd = fileno(file);
 	        fsync(fd);
 	        fclose(file);
-		if (action == ACTION_FOTA)
-			__ail_change_info(AIL_FOTA, mfx->uiapplication->appid);
-		else
-			__ail_change_info(AIL_INSTALL, mfx->uiapplication->appid);
 	}
 
 	FREE_AND_NULL(buf);
@@ -1791,12 +1840,12 @@ static int __ps_remove_nativeapp_desktop(manifest_x *mfx)
 {
 	char filepath[PKG_STRING_LEN_MAX] = "";
 	int ret = 0;
-	uiapplication_x *uiapplication = mfx->uiapplication;
+	uiapplication_x *uiapplication = NULL;
+	GList *list_up = mfx->uiapplication;
 
-	for(; uiapplication; uiapplication=uiapplication->next) {
+	for(; list_up; list_up = list_up->next) {
+		uiapplication = (uiapplication_x *)list_up->data;
 	        snprintf(filepath, sizeof(filepath),"%s%s.desktop", DESKTOP_RW_PATH, uiapplication->appid);
-
-		__ail_change_info(AIL_REMOVE, uiapplication->appid);
 
 		ret = remove(filepath);
 		if (ret <0)
@@ -1827,12 +1876,14 @@ static int __check_preload_updated(manifest_x * mfx, const char *manifest)
 {
 	char filepath[PKG_STRING_LEN_MAX] = "";
 	int ret = 0;
-	uiapplication_x *uiapplication = mfx->uiapplication;
+	uiapplication_x *uiapplication = NULL;
+	GList *list_up = g_list_first(mfx->uiapplication);
 
 	if(strstr(manifest, MANIFEST_RO_PREFIX)) {
 		/* if preload app is updated, then remove previous desktop file on RW*/
-		for(; uiapplication; uiapplication=uiapplication->next) {
-				snprintf(filepath, sizeof(filepath),"%s%s.desktop", DESKTOP_RW_PATH, uiapplication->appid);
+		for(; list_up; list_up = list_up->next) {
+			uiapplication = (uiapplication_x *)list_up->data;
+			snprintf(filepath, sizeof(filepath),"%s%s.desktop", DESKTOP_RW_PATH, uiapplication->appid);
 			ret = remove(filepath);
 			if (ret <0)
 				return -1;
@@ -1846,7 +1897,7 @@ static int __check_preload_updated(manifest_x * mfx, const char *manifest)
 	return 0;
 }
 
-static int __get_appid_list(const char *pkgid, void *user_data)
+static int __zone_get_appid_list(const char *pkgid, void *user_data, const char *zone)
 {
 	int col = 0;
 	int cols = 0;
@@ -1858,7 +1909,26 @@ static int __get_appid_list(const char *pkgid, void *user_data)
 
 	char *query = sqlite3_mprintf("select app_id from package_app_info where package=%Q", pkgid);
 
-	ret = db_util_open(PKGMGR_PARSER_DB_FILE, &pkgmgr_parser_db, 0);
+
+	char db_path[PKG_STRING_LEN_MAX] = {'\0',};
+
+	if (zone == NULL || strcmp(zone, ZONE_HOST) == 0) {
+		snprintf(db_path, PKG_STRING_LEN_MAX, "%s", PKGMGR_PARSER_DB_FILE);
+	} else {
+		char *rootpath = NULL;
+		rootpath = __zone_get_root_path(zone);
+		if (rootpath == NULL) {
+			_LOGE("Failed to get rootpath");
+			sqlite3_free(query);
+			return -1;
+		}
+
+		snprintf(db_path, PKG_STRING_LEN_MAX, "%s%s", rootpath, PKGMGR_PARSER_DB_FILE);
+	}
+
+	_LOGD("db path(%s)", db_path);
+	ret = db_util_open(db_path, &pkgmgr_parser_db, 0);
+
 	if (ret != SQLITE_OK) {
 		_LOGE("open fail\n");
 		sqlite3_free(query);
@@ -1894,7 +1964,41 @@ static int __get_appid_list(const char *pkgid, void *user_data)
 	return ret;
 }
 
-void __call_uninstall_plugin(const char *pkgid, GList *appid_list)
+static int __get_appid_list(const char *pkgid, void *user_data)
+{
+	return __zone_get_appid_list(pkgid, user_data, NULL);
+}
+
+char *__zone_get_root_path(const char *zone)
+{
+	vsm_context_h context = NULL;
+	vsm_zone_h handle = NULL;
+	char *rootpath = NULL;
+
+	context = vsm_create_context();
+	if (context == NULL) {
+		_LOGE("Failed to create vsm context");
+		return NULL;
+	}
+
+	handle = vsm_lookup_zone_by_name(context, zone);
+	if (handle == NULL) {
+		_LOGE("Failed to lookup zone by name");
+		return NULL;
+	}
+
+	rootpath = (char *)vsm_get_zone_rootpath(handle);
+	if (rootpath == NULL) {
+		_LOGE("Failed to get rootpath");
+		return NULL;
+	}
+
+	_LOGD("rootpath : %s", rootpath);
+
+	return rootpath;
+}
+
+void __zone_call_uninstall_plugin(const char *pkgid, GList *appid_list, const char *zone)
 {
 	char *appid = NULL;
 	GList *tmp_list;
@@ -1905,7 +2009,7 @@ void __call_uninstall_plugin(const char *pkgid, GList *appid_list)
 	}
 
 	tmp_list = appid_list;
-	_pkgmgr_parser_plugin_open_db();
+	_zone_pkgmgr_parser_plugin_open_db(zone);
 
 	_pkgmgr_parser_plugin_uninstall_plugin(PKGMGR_PARSER_PLUGIN_TAG, pkgid, pkgid);
 
@@ -1919,6 +2023,11 @@ void __call_uninstall_plugin(const char *pkgid, GList *appid_list)
 	}
 
 	_pkgmgr_parser_plugin_close_db();
+}
+
+void __call_uninstall_plugin(const char *pkgid, GList *appid_list)
+{
+	__zone_call_uninstall_plugin(pkgid, appid_list, NULL);
 }
 
 static int __delete_pkgid_info_for_uninstallation(const char *pkgid)
@@ -1961,10 +2070,6 @@ static int __delete_pkgid_info_for_uninstallation(const char *pkgid)
 				_LOGD("DB appid info Delete failed\n");
 			else
 				_LOGD("DB appid info Delete Success\n");
-
-			ret = __ail_change_info(AIL_REMOVE, appid);
-			if (ret < 0)
-				_LOGD("AIL_REMOVE failed\n");
 
 			snprintf(filepath, sizeof(filepath),"%s%s.desktop", DESKTOP_RW_PATH, appid);
 			if (access(filepath, R_OK) == 0) {
@@ -2176,20 +2281,12 @@ API int pkgmgr_parser_parse_manifest_for_installation(const char *manifest, char
 
 	manifest_x *mfx = NULL;
 	int ret = -1;
-	char *hash = NULL;
 
 	xmlInitParser();
 	mfx = pkgmgr_parser_process_manifest_xml(manifest);
 	retvm_if(mfx == NULL, PM_PARSER_R_ERROR, "argument supplied is NULL");
 
 	_LOGD("Parsing Finished\n");
-
-	_LOGD("Generating the hash for manifest");
-	hash = pkgmgrinfo_basic_generate_hash_for_file(manifest);
-	if(hash != NULL){
-		mfx->hash = hash;
-		_LOGD("Hash for [%s] file is [%s]\n",manifest,hash);
-	}
 
 	__add_preload_info(mfx, manifest);
 
@@ -2200,8 +2297,9 @@ API int pkgmgr_parser_parse_manifest_for_installation(const char *manifest, char
 	ret = pkgmgr_parser_insert_manifest_info_in_db(mfx);
 	if (ret < 0) {
 		ret = __delete_pkgid_info_for_uninstallation(mfx->package);
+		trym_if(ret == PM_PARSER_R_ERROR, "DB Delete failed");
 		ret = pkgmgr_parser_insert_manifest_info_in_db(mfx);
-		retvm_if(ret == PM_PARSER_R_ERROR, PM_PARSER_R_ERROR, "DB Insert failed");
+		trym_if(ret == PM_PARSER_R_ERROR, "DB Insert failed");
 	}
 
 	_LOGD("DB Insert Success\n");
@@ -2212,19 +2310,19 @@ API int pkgmgr_parser_parse_manifest_for_installation(const char *manifest, char
 	tryvm_if(ret == PM_PARSER_R_OK, ret = PM_PARSER_R_OK, "fota install called, dont need desktop generation\n");
 
 	ret = __ps_make_nativeapp_desktop(mfx, NULL, ACTION_INSTALL);
-
 	if (ret == -1)
 		_LOGD("Creating desktop file failed\n");
 	else
 		_LOGD("Creating desktop file Success\n");
 
+	ret = PM_PARSER_R_OK;
 
 catch:
 	pkgmgr_parser_free_manifest_xml(mfx);
 	_LOGD("Free Done\n");
 	xmlCleanupParser();
 
-	return PM_PARSER_R_OK;
+	return ret;
 }
 
 API int pkgmgr_parser_parse_manifest_for_upgrade(const char *manifest, char *const tagv[])
@@ -2235,20 +2333,12 @@ API int pkgmgr_parser_parse_manifest_for_upgrade(const char *manifest, char *con
 	manifest_x *mfx = NULL;
 	int ret = -1;
 	int package_disabled = 0;
-	char *hash = NULL;
 
 	xmlInitParser();
 	mfx = pkgmgr_parser_process_manifest_xml(manifest);
 	retvm_if(mfx == NULL, PM_PARSER_R_ERROR, "argument supplied is NULL");
 
 	_LOGD("Parsing Finished\n");
-
-	_LOGD("Generating the hash for manifest");
-	hash = pkgmgrinfo_basic_generate_hash_for_file(manifest);
-	if(hash != NULL){
-		mfx->hash = hash;
-		_LOGD("Hash for [%s] file is [%s]\n",manifest,hash);
-	}
 
 	__add_preload_info(mfx, manifest);
 	_LOGD("Added preload infomation\n");
@@ -2264,7 +2354,7 @@ API int pkgmgr_parser_parse_manifest_for_upgrade(const char *manifest, char *con
 		_LOGD("__pkgmgr_db_check_update_condition failed\n");
 
 	ret = pkgmgr_parser_update_manifest_info_in_db(mfx);
-	retvm_if(ret == PM_PARSER_R_ERROR, PM_PARSER_R_ERROR, "DB Insert failed");
+	trym_if(ret == PM_PARSER_R_ERROR, "DB Insert failed");
 	_LOGD("DB Update Success\n");
 
 	if (package_disabled == 1) {
@@ -2283,14 +2373,14 @@ API int pkgmgr_parser_parse_manifest_for_upgrade(const char *manifest, char *con
 	else
 		_LOGD("Creating desktop file Success\n");
 
-catch:
-	journal_appcore_app_updated(mfx->package);
+	ret = PM_PARSER_R_OK;
 
+catch:
 	pkgmgr_parser_free_manifest_xml(mfx);
 	_LOGD("Free Done\n");
 	xmlCleanupParser();
 
-	return PM_PARSER_R_OK;
+	return ret;
 }
 
 API int pkgmgr_parser_parse_manifest_for_uninstallation(const char *manifest, char *const tagv[])
@@ -2333,11 +2423,13 @@ API int pkgmgr_parser_parse_manifest_for_uninstallation(const char *manifest, ch
 	else
 		_LOGD("Removing desktop file Success\n");
 
+	ret = PM_PARSER_R_OK;
+
 	pkgmgr_parser_free_manifest_xml(mfx);
 	_LOGD("Free Done\n");
 	xmlCleanupParser();
 
-	return PM_PARSER_R_OK;
+	return ret;
 }
 
 API int pkgmgr_parser_parse_manifest_for_preload()
@@ -2375,7 +2467,16 @@ API int pkgmgr_parser_check_manifest_validation(const char *manifest)
 	xmlSchemaParserCtxtPtr ctx = NULL;
 	xmlSchemaValidCtxtPtr vctx = NULL;
 	xmlSchemaPtr xschema = NULL;
+	xmlDocPtr doc = NULL;
+#ifdef _APPFW_FEATURE_DELTA_UPDATE
+	if (strstr(manifest, DELTA_INFO_XML)) {
+		ctx = xmlSchemaNewParserCtxt(DELTA_INFO_SCHEMA_FILE);
+	} else {
+		ctx = xmlSchemaNewParserCtxt(SCHEMA_FILE);
+	}
+#else
 	ctx = xmlSchemaNewParserCtxt(SCHEMA_FILE);
+#endif
 	if (ctx == NULL) {
 		_LOGE("xmlSchemaNewParserCtxt() Failed\n");
 		return PM_PARSER_R_ERROR;
@@ -2386,41 +2487,50 @@ API int pkgmgr_parser_check_manifest_validation(const char *manifest)
 		ret = PM_PARSER_R_ERROR;
 		goto cleanup;
 	}
+
 	vctx = xmlSchemaNewValidCtxt(xschema);
 	if (vctx == NULL) {
 		_LOGE("xmlSchemaNewValidCtxt() Failed\n");
-		return PM_PARSER_R_ERROR;
+		ret = PM_PARSER_R_ERROR;
+		goto cleanup;
 	}
 	xmlSchemaSetValidErrors(vctx, (xmlSchemaValidityErrorFunc) fprintf, (xmlSchemaValidityWarningFunc) fprintf, stderr);
-	ret = xmlSchemaValidateFile(vctx, manifest, 0);
-	if (ret == -1) {
-		_LOGE("xmlSchemaValidateFile() failed\n");
+
+	doc = xmlParseFile(manifest);
+	if (doc == NULL) {
+		_LOGE("xmlParseFile() for %s failed\n", manifest);
 		ret = PM_PARSER_R_ERROR;
 		goto cleanup;
-	} else if (ret == 0) {
-		_LOGE("Manifest is Valid\n");
-		ret = PM_PARSER_R_OK;
+	}
+
+	ret = xmlSchemaValidateDoc(vctx, doc);
+	if (ret != 0) {
+		_LOGE("xmlSchemaValidateDoc() for %s failed\n", manifest);
+		ret = PM_PARSER_R_ERROR;
 		goto cleanup;
 	} else {
-		_LOGE("Manifest Validation Failed with error code %d\n", ret);
-		ret = PM_PARSER_R_ERROR;
+		_LOGE("Manifest is Valid\n");
+		ret = PM_PARSER_R_OK;
 		goto cleanup;
 	}
 
 cleanup:
-	if(vctx != NULL)
+	if (doc != NULL)
+		xmlFreeDoc(doc);
+
+	if (vctx != NULL)
 		xmlSchemaFreeValidCtxt(vctx);
 
-	if(ctx != NULL)
+	if (ctx != NULL)
 		xmlSchemaFreeParserCtxt(ctx);
 
-	if(xschema != NULL)
+	if (xschema != NULL)
 		xmlSchemaFree(xschema);
 
 	return ret;
 }
 
-API int pkgmgr_parser_enable_pkg(const char *pkgid, char *const tagv[])
+API int zone_pkgmgr_parser_enable_pkg(const char *pkgid, char *const tagv[], const char *zone)
 {
 	retvm_if(pkgid == NULL, PM_PARSER_R_ERROR, "pkgid is NULL.");
 
@@ -2428,20 +2538,20 @@ API int pkgmgr_parser_enable_pkg(const char *pkgid, char *const tagv[])
 	char *manifest = NULL;
 	manifest_x *mfx = NULL;
 
-	ret = pkgmgr_parser_update_enabled_pkg_info_in_db(pkgid);
+	ret = zone_pkgmgr_parser_update_enabled_pkg_info_in_db(pkgid, zone);
 	if (ret == -1)
 		_LOGD("pkgmgr_parser_update_enabled_pkg_info_in_db(%s) failed.\n", pkgid);
 	else
 		_LOGD("pkgmgr_parser_update_enabled_pkg_info_in_db(%s) succeed.\n", pkgid);
 
-	manifest = __pkgid_to_manifest(pkgid);
+	manifest = __zone_pkgid_to_manifest(pkgid, zone);
 	retvm_if(manifest == NULL, PM_PARSER_R_ERROR, "manifest of pkgid(%s) is NULL.", pkgid);
 
 	xmlInitParser();
 	mfx = pkgmgr_parser_process_manifest_xml(manifest);
 	tryvm_if(mfx == NULL, ret = PM_PARSER_R_ERROR, "process_manifest_xml(%s) failed\n", pkgid);
 
-	_pkgmgr_parser_plugin_process_plugin(mfx, manifest, ACTION_INSTALL);
+	_zone_pkgmgr_parser_plugin_process_plugin(mfx, manifest, ACTION_INSTALL, zone);
 
 	ret = PM_PARSER_R_OK;
 
@@ -2457,7 +2567,33 @@ catch:
 	return ret;
 }
 
-API int pkgmgr_parser_disable_pkg(const char *pkgid, char *const tagv[])
+API int pkgmgr_parser_enable_pkg(const char *pkgid, char *const tagv[])
+{
+	return zone_pkgmgr_parser_enable_pkg(pkgid, tagv, NULL);
+}
+
+API int pkgmgr_parser_set_app_background_operation(const char *appid, bool is_disable)
+{
+	return zone_pkgmgr_parser_set_app_background_operation(appid, is_disable, NULL);
+}
+
+API int zone_pkgmgr_parser_set_app_background_operation(const char *appid, bool is_disable, const char *zone)
+{
+	int ret = -1;
+	retvm_if(appid == NULL, PM_PARSER_R_ERROR, "appid is NULL.");
+
+	ret = zone_pkgmgr_parser_update_app_disable_bg_operation_info_in_db(appid, zone, is_disable);
+	if (ret == -1) {
+		_LOGE("pkgmgr_parser_update_app_disabled_bg_operation_info_in_db[%s] failed.\n", appid);
+		return ret;
+	}
+	else
+		_LOGD("pkgmgr_parser_update_app_disabled_bg_operation_info_in_db[%s] succeed.\n", appid);
+
+	return PM_PARSER_R_OK;
+}
+
+API int zone_pkgmgr_parser_disable_pkg(const char *pkgid, char *const tagv[], const char *zone)
 {
 	retvm_if(pkgid == NULL, PM_PARSER_R_ERROR, "pkgid is NULL.");
 
@@ -2465,15 +2601,15 @@ API int pkgmgr_parser_disable_pkg(const char *pkgid, char *const tagv[])
 	GList *appid_list = NULL;
 
 	/*get appid list*/
-	ret = __get_appid_list(pkgid, &appid_list);
+	ret = __zone_get_appid_list(pkgid, &appid_list, zone);
 	retvm_if(ret < 0, PM_PARSER_R_ERROR, "Fail to get app_list");
 
 	_LOGD("call plugin uninstall\n");
 
 	/*call plugin uninstall*/
-	__call_uninstall_plugin(pkgid, appid_list);
+	__zone_call_uninstall_plugin(pkgid, appid_list, zone);
 
-	ret = pkgmgr_parser_update_disabled_pkg_info_in_db(pkgid);
+	ret = zone_pkgmgr_parser_update_disabled_pkg_info_in_db(pkgid, zone);
 	if (ret == -1)
 		_LOGD("pkgmgr_parser_update_disabled_pkg_info_in_db(%s) failed.\n", pkgid);
 	else
@@ -2482,6 +2618,11 @@ API int pkgmgr_parser_disable_pkg(const char *pkgid, char *const tagv[])
 	g_list_free(appid_list);
 
 	return PM_PARSER_R_OK;
+}
+
+API int pkgmgr_parser_disable_pkg(const char *pkgid, char *const tagv[])
+{
+	return zone_pkgmgr_parser_disable_pkg(pkgid, tagv, NULL);
 }
 
 /* update aliasid entry in package-app-aliasid */
@@ -2495,3 +2636,26 @@ API int pkgmgr_parser_update_app_aliasid(void )
 	return pkgmgr_parser_update_app_aliasid_info_in_db();
 }
 
+#ifdef _APPFW_FEATURE_EXPANSION_PKG_INSTALL
+API int pkgmgr_parser_insert_tep(const char *pkgid, const char *tep_name)
+{
+	return pkgmgr_parser_insert_tep_in_db(pkgid, tep_name);
+}
+
+API int pkgmgr_parser_update_tep(const char *pkgid, const char *tep_name)
+{
+	return pkgmgr_parser_update_tep_in_db(pkgid, tep_name);
+}
+
+API int pkgmgr_parser_delete_tep(const char *pkgid)
+{
+	return pkgmgr_parser_delete_tep_in_db(pkgid);
+}
+#endif
+
+#ifdef _APPFW_FEATURE_MOUNT_INSTALL
+API int pkgmgr_parser_insert_mount_install_info(const char *pkgid, bool ismount, const char *tpk_name)
+{
+	return pkgmgr_parser_insert_mount_install_info_in_db(pkgid, ismount, tpk_name);
+}
+#endif

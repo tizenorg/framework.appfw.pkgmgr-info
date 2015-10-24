@@ -37,6 +37,8 @@ typedef struct _pkgmgr_cert_x {
 	int cert_id;
 } pkgmgr_cert_x;
 
+extern int strverscmp (const char *, const char *);
+
 static void __destroy_each_node(gpointer data, gpointer user_data)
 {
 	ret_if(data == NULL);
@@ -48,288 +50,266 @@ static void __destroy_each_node(gpointer data, gpointer user_data)
 
 static void __get_pkginfo_from_db(char *colname, char *coltxt, manifest_x *manifest_info)
 {
-	if (colname == NULL || manifest_info == NULL)
-		return;
+	GList *tmp = NULL;
+	label_x* lbl = NULL;
+	author_x* author = NULL;
+	description_x* description = NULL;
+	icon_x* icon = NULL;
+
+	if((tmp = g_list_last(manifest_info->label))) {
+		lbl = (label_x*) tmp->data;
+		if (lbl == NULL) {
+			_LOGE("lbl is NULL.");
+			return;
+		}
+	}
+
+	if((tmp = g_list_last(manifest_info->author))) {
+		author = (author_x*)tmp->data;
+		if (author == NULL) {
+			_LOGE("author is NULL.");
+			return;
+		}
+	}
+
+	if((tmp = g_list_last(manifest_info->description))) {
+		description = (description_x*)tmp->data;
+		if (description == NULL) {
+			_LOGE("description is NULL.");
+			return;
+		}
+	}
+
+	if((tmp = g_list_last(manifest_info->icon))) {
+		icon = (icon_x*)tmp->data;
+		if (icon == NULL) {
+			_LOGE("icon is NULL.");
+			return;
+		}
+	}
 
 	if (strcmp(colname, "package") == 0) {
 		if (manifest_info->package)
 			return;
+		manifest_info->package = strdup(coltxt);
 
-		if (coltxt)
-			manifest_info->package = strdup(coltxt);
 	} else if (strcmp(colname, "package_type") == 0) {
-		if (coltxt)
-			manifest_info->type = strdup(coltxt);
-		else
-			manifest_info->type = NULL;
-	} else if (strcmp(colname, "package_version") == 0) {
-		if (coltxt)
-			manifest_info->version = strdup(coltxt);
-		else
-			manifest_info->version = NULL;
-	} else if (strcmp(colname, "install_location") == 0) {
-		if (coltxt)
-			manifest_info->installlocation = strdup(coltxt);
-		else
-			manifest_info->installlocation = NULL;
-	} else if (strcmp(colname, "package_size") == 0) {
-		if (coltxt)
-			manifest_info->package_size = strdup(coltxt);
-		else
-			manifest_info->package_size = NULL;
-	} else if (strcmp(colname, "package_removable") == 0 ){
-		if (coltxt)
-			manifest_info->removable = strdup(coltxt);
-		else
-			manifest_info->removable = NULL;
-	} else if (strcmp(colname, "package_preload") == 0 ){
-		if (coltxt)
-			manifest_info->preload = strdup(coltxt);
-		else
-			manifest_info->preload = NULL;
-	} else if (strcmp(colname, "package_readonly") == 0 ){
-		if (coltxt)
-			manifest_info->readonly = strdup(coltxt);
-		else
-			manifest_info->readonly = NULL;
-	} else if (strcmp(colname, "package_update") == 0 ){
-		if (coltxt)
-			manifest_info->update= strdup(coltxt);
-		else
-			manifest_info->update = NULL;
-	} else if (strcmp(colname, "package_system") == 0 ){
-		if (coltxt)
-			manifest_info->system= strdup(coltxt);
-		else
-			manifest_info->system = NULL;
-	} else if (strcmp(colname, "package_appsetting") == 0 ){
-		if (coltxt)
-			manifest_info->appsetting = strdup(coltxt);
-		else
-			manifest_info->appsetting = NULL;
-	} else if (strcmp(colname, "installed_time") == 0 ){
-		if (coltxt)
-			manifest_info->installed_time = strdup(coltxt);
-		else
-			manifest_info->installed_time = NULL;
-	} else if (strcmp(colname, "installed_storage") == 0 ){
-		if (coltxt)
-			manifest_info->installed_storage = strdup(coltxt);
-		else
-			manifest_info->installed_storage = NULL;
-	} else if (strcmp(colname, "mainapp_id") == 0 ){
-		if (coltxt)
-			manifest_info->mainapp_id = strdup(coltxt);
-		else
-			manifest_info->mainapp_id = NULL;
-	} else if (strcmp(colname, "storeclient_id") == 0 ){
-		if (coltxt)
-			manifest_info->storeclient_id = strdup(coltxt);
-		else
-			manifest_info->storeclient_id = NULL;
-	} else if (strcmp(colname, "package_url") == 0 ){
-		if (coltxt)
-			manifest_info->package_url = strdup(coltxt);
-		else
-			manifest_info->package_url = NULL;
-	} else if (strcmp(colname, "root_path") == 0 ){
-		if (coltxt)
-			manifest_info->root_path = strdup(coltxt);
-		else
-			manifest_info->root_path = NULL;
-	} else if (strcmp(colname, "csc_path") == 0 ){
-		if (coltxt)
-			manifest_info->csc_path = strdup(coltxt);
-		else
-			manifest_info->csc_path = NULL;
-	} else if (strcmp(colname, "package_support_disable") == 0 ){
-		if (coltxt)
-			manifest_info->support_disable = strdup(coltxt);
-		else
-			manifest_info->support_disable = NULL;
-	} else if (strcmp(colname, "package_mother_package") == 0 ){
-		if (coltxt)
-			manifest_info->mother_package = strdup(coltxt);
-		else
-			manifest_info->mother_package = NULL;
-	} else if (strcmp(colname, "package_support_mode") == 0 ){
-		if (coltxt)
-			manifest_info->support_mode = strdup(coltxt);
-		else
-			manifest_info->support_mode = NULL;
-	} else if (strcmp(colname, "package_reserve1") == 0 ){
-		if (coltxt)
-			manifest_info->support_reset = strdup(coltxt);
-		else
-			manifest_info->support_reset = NULL;
-	} else if (strcmp(colname, "package_reserve2") == 0 ){
-		if (coltxt)
-			manifest_info->use_reset = strdup(coltxt);
-		else
-			manifest_info->use_reset = NULL;
-	} else if (strcmp(colname, "package_hash") == 0 ){
-		if (coltxt)
-			manifest_info->hash = strdup(coltxt);
-		else
-			manifest_info->hash = NULL;
-	} else if (strcmp(colname, "package_reserve3") == 0 ){
-		if (coltxt)
-			manifest_info->groupid = strdup(coltxt);
-		else
-			manifest_info->groupid = NULL;
+		manifest_info->type = strdup(coltxt);
 
+	} else if (strcmp(colname, "package_version") == 0) {
+		manifest_info->version = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_api_version") == 0) {
+		manifest_info->api_version = strdup(coltxt);
+
+	} else if (strcmp(colname, "install_location") == 0) {
+		manifest_info->installlocation = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_size") == 0) {
+		manifest_info->package_size = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_removable") == 0 ){
+		manifest_info->removable = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_preload") == 0 ){
+		manifest_info->preload = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_readonly") == 0 ){
+		manifest_info->readonly = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_update") == 0 ){
+		manifest_info->update= strdup(coltxt);
+
+	} else if (strcmp(colname, "package_system") == 0 ){
+		manifest_info->system= strdup(coltxt);
+
+	} else if (strcmp(colname, "package_appsetting") == 0 ){
+		manifest_info->appsetting = strdup(coltxt);
+
+	} else if (strcmp(colname, "installed_time") == 0 ){
+		manifest_info->installed_time = strdup(coltxt);
+
+	} else if (strcmp(colname, "installed_storage") == 0 ){
+		manifest_info->installed_storage = strdup(coltxt);
+
+	} else if (strcmp(colname, "mainapp_id") == 0 ){
+		manifest_info->mainapp_id = strdup(coltxt);
+
+	} else if (strcmp(colname, "storeclient_id") == 0 ){
+		manifest_info->storeclient_id = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_url") == 0 ){
+		manifest_info->package_url = strdup(coltxt);
+
+	} else if (strcmp(colname, "root_path") == 0 ){
+		manifest_info->root_path = strdup(coltxt);
+
+	} else if (strcmp(colname, "csc_path") == 0 ){
+		manifest_info->csc_path = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_support_disable") == 0 ){
+		manifest_info->support_disable = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_mother_package") == 0 ){
+		manifest_info->mother_package = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_support_mode") == 0 ){
+		manifest_info->support_mode = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_backend_installer") == 0 ){
+		manifest_info->backend_installer = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_custom_smack_label") == 0 ){
+		manifest_info->custom_smack_label = strdup(coltxt);
+
+	} else if (strcmp(colname, "package_reserve3") == 0 ){
+		manifest_info->groupid = strdup(coltxt);
 	/*end package_info table*/
 
 	} else if (strcmp(colname, "author_email") == 0 ){
-		if (coltxt)
-			manifest_info->author->email = strdup(coltxt);
-		else
-			manifest_info->author->email = NULL;
+		if (author)
+			author->email = strdup(coltxt);
+
 	} else if (strcmp(colname, "author_href") == 0 ){
-		if (coltxt)
-			manifest_info->author->href = strdup(coltxt);
-		else
-			manifest_info->author->href = NULL;
+		if (author)
+			author->href = strdup(coltxt);
+
 	} else if (strcmp(colname, "package_label") == 0 ){
-		if (coltxt)
-			manifest_info->label->text = strdup(coltxt);
-		else
-			manifest_info->label->text = NULL;
+		if (lbl)
+			lbl->text = strdup(coltxt);
+
 	} else if (strcmp(colname, "package_icon") == 0 ){
-		if (coltxt)
-			manifest_info->icon->text = strdup(coltxt);
-		else
-			manifest_info->icon->text = NULL;
+		if (icon)
+			icon->text = strdup(coltxt);
+
 	} else if (strcmp(colname, "package_description") == 0 ){
-		if (coltxt)
-			manifest_info->description->text = strdup(coltxt);
-		else
-			manifest_info->description->text = NULL;
+		if (description)
+			description->text = strdup(coltxt);
+
 	} else if (strcmp(colname, "package_author") == 0 ){
-		if (coltxt)
-			manifest_info->author->text = strdup(coltxt);
-		else
-			manifest_info->author->text = NULL;
+		if (author)
+			author->text = strdup(coltxt);
+
 	} else if (strcmp(colname, "package_locale") == 0 ){
-		if (coltxt) {
-			manifest_info->author->lang = strdup(coltxt);
-			manifest_info->icon->lang = strdup(coltxt);
-			manifest_info->label->lang = strdup(coltxt);
-			manifest_info->description->lang = strdup(coltxt);
-		}
-		else {
-			manifest_info->author->lang = NULL;
-			manifest_info->icon->lang = NULL;
-			manifest_info->label->lang = NULL;
-			manifest_info->description->lang = NULL;
-		}
-	/*end package_localized_info table*/
+		if (author)
+			author->lang = strdup(coltxt);
+		if (icon)
+			icon->lang = strdup(coltxt);
+		if (lbl)
+			lbl->lang = strdup(coltxt);
+		if (description)
+			description->lang = strdup(coltxt);
+		/*end package_localized_info table*/
 
 	} else if (strcmp(colname, "privilege") == 0 ){
-		if (coltxt)
-			manifest_info->privileges->privilege->text = strdup(coltxt);
-		else
-			manifest_info->privileges->privilege->text = NULL;
+		manifest_info->privileges = g_list_append(manifest_info->privileges,strdup(coltxt));
+
+#ifdef _APPFW_FEATURE_EXPANSION_PKG_INSTALL
+	}  else if (strcmp(colname, "package_tep_name") == 0 ) {
+		manifest_info->tep_name = strdup(coltxt);
+#endif
 
 	}
 	/*end package_privilege_info table*/
 
 }
 
-static void __get_pkginfo_for_list(sqlite3_stmt *stmt, pkgmgr_pkginfo_x *udata)
+static void __get_pkginfo_for_list(sqlite3_stmt *stmt, GList **udata)
 {
 	int i = 0;
 	int ncols = 0;
 	char *colname = NULL;
 	char *coltxt = NULL;
 	pkgmgr_pkginfo_x *info = NULL;
+	icon_x* icon = NULL;
+	label_x *label = NULL;
+	author_x* author = NULL;
+	description_x *description = NULL;
 
 	info = calloc(1, sizeof(pkgmgr_pkginfo_x));
-	if (info == NULL) {
-		_LOGE("out of memory");
-		return;
+	if (!info) {
+		_LOGE("malloc failed");
+		goto catch;
 	}
 
 	info->manifest_info = (manifest_x *)calloc(1, sizeof(manifest_x));
-	if (info->manifest_info == NULL) {
-		_LOGE("out of memory");
-		free(info);
-		return;
-	}
-
-	info->manifest_info->icon= (icon_x *)calloc(1, sizeof(icon_x));
-	if (info->manifest_info->icon == NULL) {
-		_LOGE("out of memory");
-		free(info->manifest_info);
-		free(info);
-		return;
-	}
-
-	info->manifest_info->label= (label_x *)calloc(1, sizeof(label_x));
-	if (info->manifest_info->label == NULL) {
-		_LOGE("out of memory");
-		free(info->manifest_info->icon);
-		free(info->manifest_info);
-		free(info);
-		return;
-	}
-
-	info->manifest_info->author= (author_x *)calloc(1, sizeof(author_x));
-	if (info->manifest_info->author == NULL) {
-		_LOGE("out of memory");
-		free(info->manifest_info->label);
-		free(info->manifest_info->icon);
-		free(info->manifest_info);
-		free(info);
-		return;
-	}
-
-	info->manifest_info->description= (description_x *)calloc(1, sizeof(description_x));
-	if (info->manifest_info->description == NULL) {
-		_LOGE("out of memory");
-		free(info->manifest_info->author);
-		free(info->manifest_info->label);
-		free(info->manifest_info->icon);
-		free(info->manifest_info);
-		free(info);
-		return;
+	if (!info->manifest_info) {
+		_LOGE("malloc failed");
+		goto catch;
 	}
 
 	ncols = sqlite3_column_count(stmt);
-
-	LISTADD(udata, info);
+	*udata = g_list_append(*udata, info);
 
 	for(i = 0; i < ncols; i++)
 	{
 		colname = (char *)sqlite3_column_name(stmt, i);
 		coltxt = (char *)sqlite3_column_text(stmt, i);
 
+		if(!coltxt || !colname)
+			continue;
+
+		if((strcmp(colname, "package_label") == 0 || strcmp(colname, "package_locale") == 0 ) && label == NULL) {
+			label = calloc(1, sizeof(label_x));
+			trym_if(label == NULL, "Out of memory: label");
+			info->manifest_info->label = g_list_append(info->manifest_info->label, label);
+		}
+
+		if((strcmp(colname, "package_icon") == 0 || strcmp(colname, "package_locale") == 0 ) && icon == NULL) {
+			icon = calloc(1, sizeof(icon_x));
+			trym_if(icon == NULL, "Out of memory: icon");
+			info->manifest_info->icon = g_list_append(info->manifest_info->icon, icon);
+		}
+
+		if((strcmp(colname, "package_description") == 0 || strcmp(colname, "package_locale") == 0 ) && description == NULL) {
+			description = calloc(1, sizeof(description_x));
+			trym_if(description == NULL, "Out of memory: description");
+			info->manifest_info->description = g_list_append(info->manifest_info->description, description);
+		}
+
+		if((strcmp(colname, "package_author") == 0 || strcmp(colname, "author_email") == 0 || strcmp(colname, "author_href") == 0
+			|| strcmp(colname, "package_locale") == 0 ) && author == NULL) {
+			author = calloc(1, sizeof(author_x));
+			trym_if(author == NULL, "Out of memory: author");
+			info->manifest_info->author = g_list_append(info->manifest_info->author, author);
+		}
+
 //		_LOGE("field value  :: %s = %s \n", colname, coltxt);
 		__get_pkginfo_from_db(colname, coltxt, info->manifest_info);
 	}
+
+	return;
+
+catch:
+	//for exceptional cases
+	if (info)
+		FREE_AND_NULL(info->manifest_info);
+	FREE_AND_NULL(info);
+	FREE_AND_NULL(icon);
+	FREE_AND_NULL(label);
+	FREE_AND_NULL(author);
+	FREE_AND_NULL(description);
+	return;
 }
 
-static void __update_localed_label_for_list(sqlite3_stmt *stmt, pkgmgr_pkginfo_x *list_pkginfo)
+static void __update_localed_label_for_list(sqlite3_stmt *stmt, pkgmgr_pkginfo_x *pkginfo)
 {
 	int i = 0;
 	int ncols = 0;
 	char *colname = NULL;
 	char *coltxt = NULL;
 
-	pkgmgr_pkginfo_x *node = NULL;
-	pkgmgr_pkginfo_x *pkginfo = NULL;
-
-	LISTHEAD(list_pkginfo, node);
-	pkginfo = node->next;
+	label_x *label = NULL;
 
 	ncols = sqlite3_column_count(stmt);
 
 	for(i = 0; i < ncols; i++)
 	{
 		colname = (char *)sqlite3_column_name(stmt, i);
-		if (colname && strcmp(colname, "package_label") == 0 ){
+		if (strcmp(colname, "package_label") == 0 ){
 			coltxt = (char *)sqlite3_column_text(stmt, i);
-			FREE_AND_STRDUP(coltxt, pkginfo->manifest_info->label->text);
+			label = (label_x*)pkginfo->manifest_info->label->data;
+			FREE_AND_STRDUP(coltxt, label->text);
 		}
 	}
 }
@@ -342,28 +322,41 @@ int __pkginfo_cb(void *data, int ncols, char **coltxt, char **colname)
 	icon_x *icon = NULL;
 	label_x *label = NULL;
 	description_x *description = NULL;
-	privilege_x *privilege = NULL;
-
-	author = calloc(1, sizeof(author_x));
-	retvm_if(author == NULL, PMINFO_R_ERROR, "out of memory");
-	LISTADD(info->manifest_info->author, author);
-	icon = calloc(1, sizeof(icon_x));
-	retvm_if(icon == NULL, PMINFO_R_ERROR, "out of memory");
-	LISTADD(info->manifest_info->icon, icon);
-	label = calloc(1, sizeof(label_x));
-	retvm_if(label == NULL, PMINFO_R_ERROR, "out of memory");
-	LISTADD(info->manifest_info->label, label);
-	description = calloc(1, sizeof(description_x));
-	retvm_if(description == NULL, PMINFO_R_ERROR, "out of memory");
-	LISTADD(info->manifest_info->description, description);
-	privilege = calloc(1, sizeof(privilege_x));
-	retvm_if(privilege == NULL, PMINFO_R_ERROR, "out of memory");
-	LISTADD(info->manifest_info->privileges->privilege, privilege);
 
 	for(i = 0; i < ncols; i++)
 	{
+		if(!coltxt[i] || !colname[i])
+			continue;
+
+		if((strcmp(colname[i], "package_label") == 0 || strcmp(colname[i], "package_locale") == 0 ) && label == NULL) {
+			label = calloc(1, sizeof(label_x));
+			retvm_if(label == NULL, PMINFO_R_ERROR, "Out of memory: label");
+			info->manifest_info->label = g_list_append(info->manifest_info->label, label);
+		}
+
+		if((strcmp(colname[i], "package_icon") == 0 || strcmp(colname[i], "package_locale") == 0 ) && icon == NULL) {
+			icon = calloc(1, sizeof(icon_x));
+			retvm_if(icon == NULL, PMINFO_R_ERROR, "Out of memory: icon");
+			info->manifest_info->icon = g_list_append(info->manifest_info->icon, icon);
+		}
+
+		if((strcmp(colname[i], "package_description") == 0 || strcmp(colname[i], "package_locale") == 0 ) && description == NULL) {
+			description = calloc(1, sizeof(description_x));
+			retvm_if(description == NULL, PMINFO_R_ERROR, "Out of memory: description");
+			info->manifest_info->description = g_list_append(info->manifest_info->description, description);
+		}
+
+		if((strcmp(colname[i], "package_author") == 0 || strcmp(colname[i], "author_email") == 0 || strcmp(colname[i], "author_href") == 0
+			|| strcmp(colname[i], "package_locale") == 0) && author == NULL) {
+			author = calloc(1, sizeof(author_x));
+			retvm_if(author == NULL, PMINFO_R_ERROR, "Out of memory: author");
+			info->manifest_info->author = g_list_append(info->manifest_info->author, author);
+		}
+
+		//_LOGE("field value  :: %s = %s \n", colname[i], coltxt[i]);
 		__get_pkginfo_from_db(colname[i], coltxt[i], info->manifest_info);
 	}
+
 	return 0;
 }
 
@@ -380,14 +373,9 @@ static int __cert_cb(void *data, int ncols, char **coltxt, char **colname)
 			else
 				info->cert_id = 0;
 		} else if (strcmp(colname[i], "package") == 0) {
-			if (coltxt[i] && info->pkgid == NULL) {
+			FREE_AND_NULL(info->pkgid);
+			if (coltxt[i])
 				info->pkgid= strdup(coltxt[i]);
-			} else {
-				if (info->pkgid)
-					free(info->pkgid);
-
-				info->pkgid = NULL;
-			}
 		} else
 			continue;
 	}
@@ -408,17 +396,17 @@ API int pkgmgrinfo_pkginfo_get_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, void *us
 	sqlite3 *pkginfo_db = NULL;
 	sqlite3_stmt *stmt = NULL;
 
-	pkgmgr_pkginfo_x *node = NULL;
 	pkgmgr_pkginfo_x *pkginfo = NULL;
-	pkgmgr_pkginfo_x *list_pkginfo = NULL;
+	GList *list_pkginfo = NULL;
+	GList *node = NULL;
 
 	/*open db*/
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
-	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "db_util_open[%s] failed!", MANIFEST_DB);
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
+	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "_pminfo_db_open[%s] failed!", MANIFEST_DB);
 
-	/*Start constructing query*/
 	locale = __convert_system_locale_to_manifest_locale();
-	retvm_if(locale == NULL, PMINFO_R_ERROR, "locale is NULL");
+	retvm_if(locale == NULL, PMINFO_R_ERROR, "convert system locale to manifest locale fail");
+
 	query = sqlite3_mprintf("select * from package_info LEFT OUTER JOIN package_localized_info " \
 								"ON package_info.package=package_localized_info.package "\
 								"where package_info.package_disable='false' and package_localized_info.package_locale IN (%Q, %Q)", DEFAULT_LOCALE, locale);
@@ -426,10 +414,6 @@ API int pkgmgrinfo_pkginfo_get_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, void *us
 	/*prepare query*/
 	ret = sqlite3_prepare_v2(pkginfo_db, query, strlen(query), &stmt, NULL);
 	tryvm_if(ret != PMINFO_R_OK, ret = PMINFO_R_ERROR, "sqlite3_prepare_v2 failed[%s]\n", query);
-
-	/*calloc pkginfo_x*/
-	list_pkginfo = (pkgmgr_pkginfo_x *)calloc(1, sizeof(pkgmgr_pkginfo_x));
-	tryvm_if(list_pkginfo == NULL, ret = PMINFO_R_ERROR, "Out of Memory!!!\n");
 
 	/*step query*/
 	while(1) {
@@ -441,7 +425,103 @@ API int pkgmgrinfo_pkginfo_get_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, void *us
 
 			if (strlen(pre_pkgid) != 0) {
 				if (strcmp(pre_pkgid, pkgid) == 0) {
-					__update_localed_label_for_list(stmt, list_pkginfo);
+					node = g_list_last(list_pkginfo);
+					if (node)
+						__update_localed_label_for_list(stmt, (pkgmgr_pkginfo_x *)node->data);
+
+					memset(pre_pkgid, 0, MAX_QUERY_LEN);
+					strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
+
+					continue;
+				} else {
+					memset(pre_pkgid, 0, MAX_QUERY_LEN);
+					strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
+				}
+			} else {
+				strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
+			}
+			__get_pkginfo_for_list(stmt, &list_pkginfo);
+		} else {
+			break;
+		}
+	}
+
+	for(node = list_pkginfo; node; node = node->next) {
+		pkginfo = (pkgmgr_pkginfo_x *)node->data;
+		pkginfo->locale = strdup(locale);
+
+		ret = __pkginfo_check_installed_storage(pkginfo);
+		if(ret < 0)
+			continue;
+
+		ret = pkg_list_cb( (void *)pkginfo, user_data);
+		if(ret < 0) {
+			_LOGE("callback is stopped.");
+			break;
+		}
+	}
+
+	ret = PMINFO_R_OK;
+
+catch:
+	sqlite3_free(query);
+	sqlite3_finalize(stmt);
+	sqlite3_close(pkginfo_db);
+	FREE_AND_NULL(locale);
+
+	__cleanup_list_pkginfo(&list_pkginfo);
+	node = NULL;
+
+	return ret;
+}
+
+API int pkgmgrinfo_pkginfo_get_disabled_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, void *user_data)
+{
+	retvm_if(pkg_list_cb == NULL, PMINFO_R_EINVAL, "callback function is NULL\n");
+
+	int ret = PMINFO_R_OK;
+	char *locale = NULL;
+	char *query = NULL;
+
+	char pkgid[MAX_QUERY_LEN] = {0,};
+	char pre_pkgid[MAX_QUERY_LEN] = {0,};
+
+	sqlite3 *pkginfo_db = NULL;
+	sqlite3_stmt *stmt = NULL;
+
+	pkgmgr_pkginfo_x *pkginfo = NULL;
+	GList *node = NULL;
+	GList *list_pkginfo = NULL;
+
+	/*open db*/
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
+	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "_pminfo_db_open[%s] failed!", MANIFEST_DB);
+
+	locale = __convert_system_locale_to_manifest_locale();
+	retvm_if(locale == NULL, PMINFO_R_ERROR, "convert system locale to manifest locale fail");
+
+	/*Start constructing query*/
+	query = sqlite3_mprintf("select * from package_info LEFT OUTER JOIN package_localized_info " \
+								"ON package_info.package=package_localized_info.package " \
+								"where package_info.package_disable='true' and package_localized_info.package_locale IN (%Q, %Q)", DEFAULT_LOCALE, locale);
+
+	/*prepare query*/
+	ret = sqlite3_prepare_v2(pkginfo_db, query, strlen(query), &stmt, NULL);
+	tryvm_if(ret != PMINFO_R_OK, ret = PMINFO_R_ERROR, "sqlite3_prepare_v2 failed[%s]\n", query);
+
+	/*step query*/
+	while(1) {
+		ret = sqlite3_step(stmt);
+		if(ret == SQLITE_ROW) {
+
+			memset(pkgid, 0, MAX_QUERY_LEN);
+			strncpy(pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
+
+			if (strlen(pre_pkgid) != 0) {
+				if (strcmp(pre_pkgid, pkgid) == 0) {
+					node = g_list_last(list_pkginfo);
+					if (node)
+						__update_localed_label_for_list(stmt, (pkgmgr_pkginfo_x *)node->data);
 
 					memset(pre_pkgid, 0, MAX_QUERY_LEN);
 					strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
@@ -455,17 +535,15 @@ API int pkgmgrinfo_pkginfo_get_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, void *us
 				strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
 			}
 
-			__get_pkginfo_for_list(stmt, list_pkginfo);
+			__get_pkginfo_for_list(stmt, &list_pkginfo);
 
 		} else {
 			break;
 		}
 	}
 
-	LISTHEAD(list_pkginfo, node);
-
-	for(node = node->next; node ; node = node->next) {
-		pkginfo = node;
+	for(node = list_pkginfo; node ; node = node->next) {
+		pkginfo = (pkgmgr_pkginfo_x *)node->data;
 		pkginfo->locale = strdup(locale);
 
 		ret = __pkginfo_check_installed_storage(pkginfo);
@@ -473,9 +551,13 @@ API int pkgmgrinfo_pkginfo_get_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, void *us
 			continue;
 
 		ret = pkg_list_cb( (void *)pkginfo, user_data);
-		if(ret < 0)
+		if(ret < 0) {
+			_LOGE("callback is stopped.");
 			break;
+		}
 	}
+
+	ret = PMINFO_R_OK;
 
 catch:
 	sqlite3_free(query);
@@ -483,7 +565,8 @@ catch:
 	sqlite3_close(pkginfo_db);
 	FREE_AND_NULL(locale);
 
-	__cleanup_list_pkginfo(list_pkginfo, node);
+	__cleanup_list_pkginfo(&list_pkginfo);
+	node = NULL;
 
 	return ret;
 }
@@ -502,17 +585,17 @@ API int pkgmgrinfo_pkginfo_get_mounted_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, 
 	sqlite3 *pkginfo_db = NULL;
 	sqlite3_stmt *stmt = NULL;
 
-	pkgmgr_pkginfo_x *node = NULL;
+	GList *node = NULL;
 	pkgmgr_pkginfo_x *pkginfo = NULL;
-	pkgmgr_pkginfo_x *list_pkginfo = NULL;
+	GList *list_pkginfo = NULL;
 
 	/*open db*/
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
-	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "db_util_open[%s] failed!", MANIFEST_DB);
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
+	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "_pminfo_db_open[%s] failed!", MANIFEST_DB);
 
-	/*Start constructing query*/
 	locale = __convert_system_locale_to_manifest_locale();
-	retvm_if(locale == NULL, PMINFO_R_ERROR, "locale is NULL");
+	retvm_if(locale == NULL, PMINFO_R_ERROR, "convert system locale to manifest locale fail");
+
 	query = sqlite3_mprintf("select * from package_info LEFT OUTER JOIN package_localized_info " \
 								"ON package_info.package=package_localized_info.package "\
 								"where installed_storage='installed_external' and package_info.package_disable='false' and package_localized_info.package_locale IN (%Q, %Q)", DEFAULT_LOCALE, locale);
@@ -520,10 +603,6 @@ API int pkgmgrinfo_pkginfo_get_mounted_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, 
 	/*prepare query*/
 	ret = sqlite3_prepare_v2(pkginfo_db, query, strlen(query), &stmt, NULL);
 	tryvm_if(ret != PMINFO_R_OK, ret = PMINFO_R_ERROR, "sqlite3_prepare_v2 failed[%s]\n", query);
-
-	/*calloc pkginfo_x*/
-	list_pkginfo = (pkgmgr_pkginfo_x *)calloc(1, sizeof(pkgmgr_pkginfo_x));
-	tryvm_if(list_pkginfo == NULL, ret = PMINFO_R_ERROR, "Out of Memory!!!\n");
 
 	/*step query*/
 	while(1) {
@@ -535,7 +614,9 @@ API int pkgmgrinfo_pkginfo_get_mounted_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, 
 
 			if (strlen(pre_pkgid) != 0) {
 				if (strcmp(pre_pkgid, pkgid) == 0) {
-					__update_localed_label_for_list(stmt, list_pkginfo);
+					node = g_list_last(list_pkginfo);
+					if (node)
+						__update_localed_label_for_list(stmt, (pkgmgr_pkginfo_x *)node->data);
 
 					memset(pre_pkgid, 0, MAX_QUERY_LEN);
 					strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
@@ -548,17 +629,15 @@ API int pkgmgrinfo_pkginfo_get_mounted_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, 
 				strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
 			}
 
-			__get_pkginfo_for_list(stmt, list_pkginfo);
+			__get_pkginfo_for_list(stmt, &list_pkginfo);
 
 		} else {
 			break;
 		}
 	}
 
-	LISTHEAD(list_pkginfo, node);
-
-	for(node = node->next; node ; node = node->next) {
-		pkginfo = node;
+	for(node = list_pkginfo; node ; node = node->next) {
+		pkginfo = (pkgmgr_pkginfo_x *)node->data;
 		pkginfo->locale = strdup(locale);
 
 		ret = __pkginfo_check_installed_storage(pkginfo);
@@ -566,9 +645,12 @@ API int pkgmgrinfo_pkginfo_get_mounted_list(pkgmgrinfo_pkg_list_cb pkg_list_cb, 
 			continue;
 
 		ret = pkg_list_cb( (void *)pkginfo, user_data);
-		if(ret < 0)
+		if(ret < 0) {
+			_LOGE("callback is stopped.");
 			break;
+		}
 	}
+	ret = PMINFO_R_OK;
 
 catch:
 	sqlite3_free(query);
@@ -576,7 +658,8 @@ catch:
 	sqlite3_close(pkginfo_db);
 	FREE_AND_NULL(locale);
 
-	__cleanup_list_pkginfo(list_pkginfo, node);
+	__cleanup_list_pkginfo(&list_pkginfo);
+	node = NULL;
 
 	return ret;
 }
@@ -596,17 +679,17 @@ API int pkgmgrinfo_pkginfo_get_unmounted_list(pkgmgrinfo_pkg_list_cb pkg_list_cb
 	sqlite3 *pkginfo_db = NULL;
 	sqlite3_stmt *stmt = NULL;
 
-	pkgmgr_pkginfo_x *node = NULL;
+	GList *node = NULL;
 	pkgmgr_pkginfo_x *pkginfo = NULL;
-	pkgmgr_pkginfo_x *list_pkginfo = NULL;
+	GList *list_pkginfo = NULL;
 
 	/*open db*/
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
-	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "db_util_open[%s] failed!", MANIFEST_DB);
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
+	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "_pminfo_db_open[%s] failed!", MANIFEST_DB);
 
-	/*Start constructing query*/
 	locale = __convert_system_locale_to_manifest_locale();
-	retvm_if(locale == NULL, PMINFO_R_ERROR, "locale is NULL");
+	retvm_if(locale == NULL, PMINFO_R_ERROR, "convert system locale to manifest locale fail");
+
 	query = sqlite3_mprintf("select * from package_info LEFT OUTER JOIN package_localized_info " \
 								"ON package_info.package=package_localized_info.package "\
 								"where installed_storage='installed_external' and package_info.package_disable='false' and package_localized_info.package_locale IN (%Q, %Q)", DEFAULT_LOCALE, locale);
@@ -614,10 +697,6 @@ API int pkgmgrinfo_pkginfo_get_unmounted_list(pkgmgrinfo_pkg_list_cb pkg_list_cb
 	/*prepare query*/
 	ret = sqlite3_prepare_v2(pkginfo_db, query, strlen(query), &stmt, NULL);
 	tryvm_if(ret != PMINFO_R_OK, ret = PMINFO_R_ERROR, "sqlite3_prepare_v2 failed[%s]\n", query);
-
-	/*calloc pkginfo_x*/
-	list_pkginfo = (pkgmgr_pkginfo_x *)calloc(1, sizeof(pkgmgr_pkginfo_x));
-	tryvm_if(list_pkginfo == NULL, ret = PMINFO_R_ERROR, "Out of Memory!!!\n");
 
 	/*step query*/
 	while(1) {
@@ -629,7 +708,9 @@ API int pkgmgrinfo_pkginfo_get_unmounted_list(pkgmgrinfo_pkg_list_cb pkg_list_cb
 
 			if (strlen(pre_pkgid) != 0) {
 				if (strcmp(pre_pkgid, pkgid) == 0) {
-					__update_localed_label_for_list(stmt, list_pkginfo);
+					node = g_list_last(list_pkginfo);
+					if (node)
+						__update_localed_label_for_list(stmt, (pkgmgr_pkginfo_x *)node->data);
 
 					memset(pre_pkgid, 0, MAX_QUERY_LEN);
 					strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
@@ -643,23 +724,24 @@ API int pkgmgrinfo_pkginfo_get_unmounted_list(pkgmgrinfo_pkg_list_cb pkg_list_cb
 				strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
 			}
 
-			__get_pkginfo_for_list(stmt, list_pkginfo);
+			__get_pkginfo_for_list(stmt, &list_pkginfo);
 
 		} else {
 			break;
 		}
 	}
 
-	LISTHEAD(list_pkginfo, node);
-
-	for(node = node->next; node ; node = node->next) {
-		pkginfo = node;
+	for(node = list_pkginfo; node ; node = node->next) {
+		pkginfo = (pkgmgr_pkginfo_x *)node->data;
 		pkginfo->locale = strdup(locale);
 
 		ret = pkg_list_cb( (void *)pkginfo, user_data);
-		if(ret < 0)
+		if(ret < 0) {
+			_LOGE("callback is stopped.");
 			break;
+		}
 	}
+	ret = PMINFO_R_OK;
 
 catch:
 	sqlite3_free(query);
@@ -667,7 +749,8 @@ catch:
 	sqlite3_close(pkginfo_db);
 	FREE_AND_NULL(locale);
 
-	__cleanup_list_pkginfo(list_pkginfo, node);
+	__cleanup_list_pkginfo(&list_pkginfo);
+	node = NULL;
 
 	return ret;
 }
@@ -681,15 +764,10 @@ API int pkgmgrinfo_pkginfo_get_unmounted_pkginfo(const char *pkgid, pkgmgrinfo_p
 	char *query = NULL;
 	char *locale = NULL;
 	int exist = 0;
-	label_x *tmp1 = NULL;
-	icon_x *tmp2 = NULL;
-	description_x *tmp3 = NULL;
-	author_x *tmp4 = NULL;
-	privilege_x *tmp5 = NULL;
 	sqlite3 *pkginfo_db = NULL;
 
 	/*validate pkgid*/
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
 	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
 
 	/*check pkgid exist on db*/
@@ -712,8 +790,6 @@ API int pkgmgrinfo_pkginfo_get_unmounted_pkginfo(const char *pkgid, pkgmgrinfo_p
 	tryvm_if(pkginfo->manifest_info == NULL, ret = PMINFO_R_ERROR, "Failed to allocate memory for manifest info");
 
 	pkginfo->manifest_info->package = strdup(pkgid);
-	pkginfo->manifest_info->privileges = (privileges_x *)calloc(1, sizeof(privileges_x));
-	tryvm_if(pkginfo->manifest_info->privileges == NULL, ret = PMINFO_R_ERROR, "Failed to allocate memory for privileges info");
 
 	/*populate manifest_info from DB*/
 	query= sqlite3_mprintf("select * from package_info where package=%Q and package_disable='false'", pkgid);
@@ -738,11 +814,6 @@ API int pkgmgrinfo_pkginfo_get_unmounted_pkginfo(const char *pkgid, pkgmgrinfo_p
 	sqlite3_free(query);
 	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "Package Info DB Information retrieval failed");
 
-	SAFE_LISTHEAD(pkginfo->manifest_info->label, tmp1);
-	SAFE_LISTHEAD(pkginfo->manifest_info->icon, tmp2);
-	SAFE_LISTHEAD(pkginfo->manifest_info->description, tmp3);
-	SAFE_LISTHEAD(pkginfo->manifest_info->author, tmp4);
-	SAFE_LISTHEAD(pkginfo->manifest_info->privileges->privilege, tmp5);
 
 catch:
 	if (ret == PMINFO_R_OK)
@@ -766,15 +837,10 @@ API int pkgmgrinfo_pkginfo_get_pkginfo(const char *pkgid, pkgmgrinfo_pkginfo_h *
 	char *query = NULL;
 	char *locale = NULL;
 	int exist = 0;
-	label_x *tmp1 = NULL;
-	icon_x *tmp2 = NULL;
-	description_x *tmp3 = NULL;
-	author_x *tmp4 = NULL;
-	privilege_x *tmp5 = NULL;
 	sqlite3 *pkginfo_db = NULL;
 
 	/*validate pkgid*/
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
 	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
 
 	/*check pkgid exist on db*/
@@ -801,8 +867,6 @@ API int pkgmgrinfo_pkginfo_get_pkginfo(const char *pkgid, pkgmgrinfo_pkginfo_h *
 	tryvm_if(pkginfo->manifest_info == NULL, ret = PMINFO_R_ERROR, "Failed to allocate memory for manifest info");
 
 	pkginfo->manifest_info->package = strdup(pkgid);
-	pkginfo->manifest_info->privileges = (privileges_x *)calloc(1, sizeof(privileges_x));
-	tryvm_if(pkginfo->manifest_info->privileges == NULL, ret = PMINFO_R_ERROR, "Failed to allocate memory for privileges info");
 
 	/*populate manifest_info from DB*/
 	query= sqlite3_mprintf("select * from package_info where package=%Q and package_disable='false'", pkgid);
@@ -827,11 +891,6 @@ API int pkgmgrinfo_pkginfo_get_pkginfo(const char *pkgid, pkgmgrinfo_pkginfo_h *
 	sqlite3_free(query);
 	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "Package Info DB Information retrieval failed");
 
-	SAFE_LISTHEAD(pkginfo->manifest_info->label, tmp1);
-	SAFE_LISTHEAD(pkginfo->manifest_info->icon, tmp2);
-	SAFE_LISTHEAD(pkginfo->manifest_info->description, tmp3);
-	SAFE_LISTHEAD(pkginfo->manifest_info->author, tmp4);
-	SAFE_LISTHEAD(pkginfo->manifest_info->privileges->privilege, tmp5);
 
 	ret = __pkginfo_check_installed_storage(pkginfo);
 	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "[%s] is installed external, but is not in mmc", pkgid);
@@ -849,6 +908,85 @@ catch:
 	return ret;
 }
 
+API int pkgmgrinfo_pkginfo_get_disabled_pkginfo(const char *pkgid, pkgmgrinfo_pkginfo_h *handle)
+{
+	retvm_if(pkgid == NULL, PMINFO_R_EINVAL, "pkgid is NULL\n");
+	retvm_if(handle == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
+	pkgmgr_pkginfo_x *pkginfo = NULL;
+	int ret = PMINFO_R_OK;
+	char *query = NULL;
+	char *locale = NULL;
+	int exist = 0;
+	sqlite3 *pkginfo_db = NULL;
+
+	/*validate pkgid*/
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
+	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
+
+	/*check pkgid exist on db*/
+	query= sqlite3_mprintf("select exists(select * from package_info where package=%Q and package_disable='true')", pkgid);
+	ret = __exec_db_query(pkginfo_db, query, _pkgmgrinfo_validate_cb, (void *)&exist);
+	sqlite3_free(query);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "sqlite3_exec[%s] fail", pkgid);
+	if (exist == 0) {
+		_LOGS("pkgid[%s] not found in DB", pkgid);
+		ret = PMINFO_R_ERROR;
+		goto catch;
+	}
+
+	/*get system locale*/
+	locale = __convert_system_locale_to_manifest_locale();
+	tryvm_if(locale == NULL, ret = PMINFO_R_ERROR, "manifest locale is NULL");
+
+	pkginfo = (pkgmgr_pkginfo_x *)calloc(1, sizeof(pkgmgr_pkginfo_x));
+	tryvm_if(pkginfo == NULL, ret = PMINFO_R_ERROR, "Failed to allocate memory for pkginfo");
+
+	pkginfo->locale = strdup(locale);
+
+	pkginfo->manifest_info = (manifest_x *)calloc(1, sizeof(manifest_x));
+	tryvm_if(pkginfo->manifest_info == NULL, ret = PMINFO_R_ERROR, "Failed to allocate memory for manifest info");
+
+	pkginfo->manifest_info->package = strdup(pkgid);
+
+	/*populate manifest_info from DB*/
+	query= sqlite3_mprintf("select * from package_info where package=%Q and package_disable='true'", pkgid);
+	ret = __exec_db_query(pkginfo_db, query, __pkginfo_cb, (void *)pkginfo);
+	sqlite3_free(query);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "Package Info DB Information retrieval failed");
+
+	/*populate privilege_info from DB*/
+	query= sqlite3_mprintf("select * from package_privilege_info where package=%Q ", pkgid);
+	ret = __exec_db_query(pkginfo_db, query, __pkginfo_cb, (void *)pkginfo);
+	sqlite3_free(query);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "Package Privilege Info DB Information retrieval failed");
+
+	query= sqlite3_mprintf("select * from package_localized_info where package=%Q and package_locale=%Q", pkgid, locale);
+	ret = __exec_db_query(pkginfo_db, query, __pkginfo_cb, (void *)pkginfo);
+	sqlite3_free(query);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "Package Info DB Information retrieval failed");
+
+	/*Also store the values corresponding to default locales*/
+	query= sqlite3_mprintf("select * from package_localized_info where package=%Q and package_locale=%Q", pkgid, DEFAULT_LOCALE);
+	ret = __exec_db_query(pkginfo_db, query, __pkginfo_cb, (void *)pkginfo);
+	sqlite3_free(query);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "Package Info DB Information retrieval failed");
+
+
+	ret = __pkginfo_check_installed_storage(pkginfo);
+	tryvm_if(ret == -1, ret = PMINFO_R_ERROR, "[%s] is installed external, but is not in mmc", pkgid);
+
+catch:
+	if (ret == PMINFO_R_OK)
+		*handle = (void*)pkginfo;
+	else {
+		*handle = NULL;
+		__cleanup_pkginfo(pkginfo);
+	}
+	sqlite3_close(pkginfo_db);
+
+	FREE_AND_NULL(locale);
+	return ret;
+}
 
 API int pkgmgrinfo_pkginfo_get_pkgname(pkgmgrinfo_pkginfo_h handle, char **pkg_name)
 {
@@ -897,6 +1035,58 @@ API int pkgmgrinfo_pkginfo_get_version(pkgmgrinfo_pkginfo_h handle, char **versi
 	return PMINFO_R_OK;
 }
 
+API int pkgmgrinfo_pkginfo_get_api_version(pkgmgrinfo_pkginfo_h handle, char **api_version)
+{
+	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL\n");
+	retvm_if(api_version == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
+	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
+	*api_version = (char *)info->manifest_info->api_version;
+	return PMINFO_R_OK;
+}
+
+#ifdef _APPFW_FEATURE_EXPANSION_PKG_INSTALL
+API int pkgmgrinfo_pkginfo_get_tep_name(pkgmgrinfo_pkginfo_h handle, char **tep_name)
+{
+	retvm_if(handle == NULL, PMINFO_R_EINVAL, "appinfo handle is NULL\n");
+	retvm_if(tep_name == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
+
+	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
+	if (info->manifest_info && info->manifest_info->tep_name)
+		*tep_name = (char *)(info->manifest_info->tep_name);
+	else
+		return PMINFO_R_ERROR;
+
+	return PMINFO_R_OK;
+}
+#endif
+
+API int pkgmgrinfo_pkginfo_check_api_version(pkgmgrinfo_pkginfo_h handle, const char *api_version, int *result)
+{
+	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL\n");
+	retvm_if(api_version == NULL, PMINFO_R_EINVAL, "api_version is NULL\n");
+	retvm_if(result == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
+
+	int ret;
+	char *pkg_api_version = NULL;
+
+	ret = pkgmgrinfo_pkginfo_get_api_version(handle, &pkg_api_version);
+	if (ret != PMINFO_R_OK) {
+		_LOGE("pkgmgrinfo_pkginfo_get_api_version is failed\n");
+		return PMINFO_R_ERROR;
+	}
+
+	if (pkg_api_version == NULL) {
+		_LOGE("pkg_api_version is null\n");
+		return PMINFO_R_ERROR;
+	}
+
+	ret = strverscmp(pkg_api_version, api_version);
+
+	*result = ret;
+
+	return PMINFO_R_OK;
+}
+
 API int pkgmgrinfo_pkginfo_get_install_location(pkgmgrinfo_pkginfo_h handle, pkgmgrinfo_install_location *location)
 {
 	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL\n");
@@ -919,9 +1109,9 @@ API int pkgmgrinfo_pkginfo_get_icon(pkgmgrinfo_pkginfo_h handle, char **icon)
 {
 	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL");
 	retvm_if(icon == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL");
-	int ret = PMINFO_R_OK;
 	char *locale = NULL;
 	icon_x *ptr = NULL;
+	GList *start = NULL;
 	*icon = NULL;
 
 	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
@@ -929,9 +1119,10 @@ API int pkgmgrinfo_pkginfo_get_icon(pkgmgrinfo_pkginfo_h handle, char **icon)
 	locale = info->locale;
 	retvm_if(locale == NULL, PMINFO_R_ERROR, "manifest locale is NULL");
 
-	for(ptr = info->manifest_info->icon; ptr != NULL; ptr = ptr->next)
+	for(start = info->manifest_info->icon; start != NULL; start = start->next)
 	{
-		if (ptr->lang) {
+		ptr = (icon_x*)start->data;
+		if (ptr && ptr->lang) {
 			if (strcmp(ptr->lang, locale) == 0) {
 				if (ptr->text) {
 					*icon = (char *)ptr->text;
@@ -951,7 +1142,9 @@ API int pkgmgrinfo_pkginfo_get_icon(pkgmgrinfo_pkginfo_h handle, char **icon)
 		}
 	}
 
-	return ret;
+	retvm_if(*icon == NULL, PMINFO_R_ERROR, "Failed to find icon");
+
+	return PMINFO_R_OK;
 }
 
 API int pkgmgrinfo_pkginfo_get_label(pkgmgrinfo_pkginfo_h handle, char **label)
@@ -961,14 +1154,16 @@ API int pkgmgrinfo_pkginfo_get_label(pkgmgrinfo_pkginfo_h handle, char **label)
 	int ret = PMINFO_R_OK;
 	char *locale = NULL;
 	label_x *ptr = NULL;
+	GList *lbl_list = NULL;
 	*label = NULL;
 
 	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
 	locale = info->locale;
 	retvm_if(locale == NULL, PMINFO_R_ERROR, "manifest locale is NULL");
 
-	for(ptr = info->manifest_info->label; ptr != NULL; ptr = ptr->next)
+	for(lbl_list = info->manifest_info->label; lbl_list != NULL; lbl_list = lbl_list->next)
 	{
+		ptr = (label_x*)lbl_list->data;
 		if (ptr->lang) {
 			if (strcmp(ptr->lang, locale) == 0) {
 				if (ptr->text) {
@@ -998,25 +1193,29 @@ API int pkgmgrinfo_pkginfo_get_description(pkgmgrinfo_pkginfo_h handle, char **d
 	retvm_if(description == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
 	char *locale = NULL;
 	description_x *ptr = NULL;
+	GList *desc_list = NULL;
 	*description = NULL;
 
 	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
 	locale = info->locale;
 	retvm_if(locale == NULL, PMINFO_R_ERROR, "manifest locale is NULL");
 
-	for(ptr = info->manifest_info->description; ptr != NULL; ptr = ptr->next)
+	for(desc_list = info->manifest_info->description; desc_list != NULL; desc_list = desc_list->next)
 	{
-		if (ptr->lang) {
-			if (strcmp(ptr->lang, locale) == 0) {
-				*description = (char *)ptr->text;
-				if (strcasecmp(*description, PKGMGR_PARSER_EMPTY_STR) == 0) {
-					locale = DEFAULT_LOCALE;
-					continue;
-				} else
+		ptr = (description_x*)desc_list->data;
+		if(ptr){
+			if (ptr->lang) {
+				if (strcmp(ptr->lang, locale) == 0) {
+					*description = (char *)ptr->text;
+					if (strcasecmp(*description, PKGMGR_PARSER_EMPTY_STR) == 0) {
+						locale = DEFAULT_LOCALE;
+						continue;
+					} else
+						break;
+				} else if (strcmp(ptr->lang, DEFAULT_LOCALE) == 0) {
+					*description = (char *)ptr->text;
 					break;
-			} else if (strcmp(ptr->lang, DEFAULT_LOCALE) == 0) {
-				*description = (char *)ptr->text;
-				break;
+				}
 			}
 		}
 	}
@@ -1030,13 +1229,15 @@ API int pkgmgrinfo_pkginfo_get_author_name(pkgmgrinfo_pkginfo_h handle, char **a
 	char *locale = NULL;
 	author_x *ptr = NULL;
 	*author_name = NULL;
+	GList *ath_list = NULL;
 
 	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
 	locale = info->locale;
 	retvm_if(locale == NULL, PMINFO_R_ERROR, "manifest locale is NULL");
 
-	for(ptr = info->manifest_info->author; ptr != NULL; ptr = ptr->next)
+	for(ath_list = info->manifest_info->author; ath_list != NULL; ath_list = ath_list->next)
 	{
+		ptr = (author_x*)ath_list->data;
 		if (ptr->lang) {
 			if (strcmp(ptr->lang, locale) == 0) {
 				*author_name = (char *)ptr->text;
@@ -1059,7 +1260,8 @@ API int pkgmgrinfo_pkginfo_get_author_email(pkgmgrinfo_pkginfo_h handle, char **
 	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL\n");
 	retvm_if(author_email == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
 	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
-	*author_email = (char *)info->manifest_info->author->email;
+	author_x* author = (author_x*)info->manifest_info->author->data;
+	*author_email = (char *)author->email;
 	return PMINFO_R_OK;
 }
 
@@ -1068,7 +1270,8 @@ API int pkgmgrinfo_pkginfo_get_author_href(pkgmgrinfo_pkginfo_h handle, char **a
 	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL\n");
 	retvm_if(author_href == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
 	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
-	*author_href = (char *)info->manifest_info->author->href;
+	author_x* author = (author_x*)info->manifest_info->author->data;
+	*author_href = (char *)author->href;
 	return PMINFO_R_OK;
 }
 
@@ -1171,21 +1374,6 @@ API int pkgmgrinfo_pkginfo_get_support_mode(pkgmgrinfo_pkginfo_h handle, int *su
 	return PMINFO_R_OK;
 }
 
-API int pkgmgrinfo_pkginfo_get_hash(pkgmgrinfo_pkginfo_h handle, char **hash)
-{
-	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL\n");
-	retvm_if(hash == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
-
-	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
-	if (info->manifest_info->hash)
-		*hash = (char *)info->manifest_info->hash;
-	else
-		*hash = NULL;
-
-	return PMINFO_R_OK;
-
-}
-
 API int pkgmgrinfo_pkginfo_get_groupid(pkgmgrinfo_pkginfo_h handle, char **groupid)
 {
 	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL\n");
@@ -1200,17 +1388,25 @@ API int pkgmgrinfo_pkginfo_get_groupid(pkgmgrinfo_pkginfo_h handle, char **group
 	return PMINFO_R_OK;
 }
 
-API int pkgmgrinfo_pkginfo_get_support_reset(pkgmgrinfo_pkginfo_h handle, char **support_reset)
+API int pkgmgrinfo_pkginfo_get_backend_installer(pkgmgrinfo_pkginfo_h handle, char **backend_installer)
 {
 	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL\n");
-	retvm_if(support_reset == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
-
+	retvm_if(backend_installer == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
 	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
-	if (info->manifest_info->support_reset)
-		*support_reset = (char *)info->manifest_info->support_reset;
+	if (info->manifest_info->backend_installer)
+		*backend_installer = (char *)info->manifest_info->backend_installer;
 	else
 		return PMINFO_R_ERROR;
 
+	return PMINFO_R_OK;
+}
+
+API int pkgmgrinfo_pkginfo_get_custom_smack_label(pkgmgrinfo_pkginfo_h handle, char **smack_label)
+{
+	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL\n");
+	retvm_if(smack_label == NULL, PMINFO_R_EINVAL, "Argument supplied to hold return value is NULL\n");
+	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
+	*smack_label = (char *)info->manifest_info->custom_smack_label;
 	return PMINFO_R_OK;
 }
 
@@ -1220,12 +1416,14 @@ API int pkgmgrinfo_pkginfo_foreach_privilege(pkgmgrinfo_pkginfo_h handle,
 	retvm_if(handle == NULL, PMINFO_R_EINVAL, "pkginfo handle is NULL");
 	retvm_if(privilege_func == NULL, PMINFO_R_EINVAL, "Callback function is NULL");
 	int ret = -1;
-	privilege_x *ptr = NULL;
+	GList *list = NULL;
+	char *ptr = NULL;
 	pkgmgr_pkginfo_x *info = (pkgmgr_pkginfo_x *)handle;
-	ptr = info->manifest_info->privileges->privilege;
-	for (; ptr; ptr = ptr->next) {
-		if (ptr->text){
-			ret = privilege_func(ptr->text, user_data);
+	list = info->manifest_info->privileges;
+	for (; list; list = list->next) {
+		ptr = (char*)list->data;
+		if (ptr){
+			ret = privilege_func(ptr, user_data);
 			if (ret < 0)
 				break;
 		}
@@ -1252,7 +1450,7 @@ API int pkgmgrinfo_pkginfo_compare_pkg_cert_info(const char *lhs_package_id, con
 	info = (pkgmgr_cert_x *)calloc(1, sizeof(pkgmgr_cert_x));
 	retvm_if(info == NULL, PMINFO_R_ERROR, "Out of Memory!!!");
 
-	ret = db_util_open_with_options(CERT_DB, &pkgmgr_cert_db, SQLITE_OPEN_READONLY, NULL);
+	ret = _pminfo_db_open_with_options(CERT_DB, &pkgmgr_cert_db, SQLITE_OPEN_READONLY);
 	if (ret != SQLITE_OK) {
 		_LOGE("connect db [%s] failed!\n", CERT_DB);
 		ret = PMINFO_R_ERROR;
@@ -1357,10 +1555,10 @@ API int pkgmgrinfo_pkginfo_compare_app_cert_info(const char *lhs_app_id, const c
 	info = (pkgmgr_cert_x *)calloc(1, sizeof(pkgmgr_cert_x));
 	retvm_if(info == NULL, PMINFO_R_ERROR, "Out of Memory!!!");
 
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
 	tryvm_if(ret != SQLITE_OK, ret = PMINFO_R_ERROR, "connect db [%s] failed!", MANIFEST_DB);
 
-	query = sqlite3_mprintf("select exists(select * from package_app_info where app_id=%Q and app_disable='false')", lhs_app_id);
+	query = sqlite3_mprintf("select exists(select * from package_app_info where app_id=%Q)", lhs_app_id);
 	if (SQLITE_OK !=
 	    sqlite3_exec(pkginfo_db, query, _pkgmgrinfo_validate_cb, (void *)&exist, &error_message)) {
 		_LOGE("Don't execute query = %s error message = %s\n", query,
@@ -1374,7 +1572,7 @@ API int pkgmgrinfo_pkginfo_compare_app_cert_info(const char *lhs_app_id, const c
 		lpkgid = NULL;
 	} else {
 		sqlite3_free(query);
-		query = sqlite3_mprintf("select package from package_app_info where app_id=%Q and app_disable='false'", lhs_app_id);
+		query = sqlite3_mprintf("select package from package_app_info where app_id=%Q", lhs_app_id);
 		if (SQLITE_OK !=
 			sqlite3_exec(pkginfo_db, query, __cert_cb, (void *)info, &error_message)) {
 			_LOGE("Don't execute query = %s error message = %s\n", query,
@@ -1395,7 +1593,7 @@ API int pkgmgrinfo_pkginfo_compare_app_cert_info(const char *lhs_app_id, const c
 	}
 
 	sqlite3_free(query);
-	query = sqlite3_mprintf("select exists(select * from package_app_info where app_id=%Q and app_disable='false')", rhs_app_id);
+	query = sqlite3_mprintf("select exists(select * from package_app_info where app_id=%Q)", rhs_app_id);
 	if (SQLITE_OK !=
 	    sqlite3_exec(pkginfo_db, query, _pkgmgrinfo_validate_cb, (void *)&exist, &error_message)) {
 		_LOGE("Don't execute query = %s error message = %s\n", query,
@@ -1409,7 +1607,7 @@ API int pkgmgrinfo_pkginfo_compare_app_cert_info(const char *lhs_app_id, const c
 		rpkgid = NULL;
 	} else {
 		sqlite3_free(query);
-		query = sqlite3_mprintf("select package from package_app_info where app_id=%Q and app_disable='false'", rhs_app_id);
+		query = sqlite3_mprintf("select package from package_app_info where app_id=%Q", rhs_app_id);
 		if (SQLITE_OK !=
 			sqlite3_exec(pkginfo_db, query, __cert_cb, (void *)info, &error_message)) {
 			_LOGE("Don't execute query = %s error message = %s\n", query,
@@ -1670,8 +1868,10 @@ API int pkgmgrinfo_pkginfo_filter_add_int(pkgmgrinfo_pkginfo_filter_h handle,
 	/*If API is called multiple times for same property, we should override the previous values.
 	Last value set will be used for filtering.*/
 	link = g_slist_find_custom(filter->list, (gconstpointer)node, __compare_func);
-	if (link)
+	if (link) {
+		_pminfo_destroy_node((gpointer)link->data);
 		filter->list = g_slist_delete_link(filter->list, link);
+	}
 	filter->list = g_slist_append(filter->list, (gpointer)node);
 	return PMINFO_R_OK;
 
@@ -1711,8 +1911,10 @@ API int pkgmgrinfo_pkginfo_filter_add_bool(pkgmgrinfo_pkginfo_filter_h handle,
 	/*If API is called multiple times for same property, we should override the previous values.
 	Last value set will be used for filtering.*/
 	link = g_slist_find_custom(filter->list, (gconstpointer)node, __compare_func);
-	if (link)
+	if (link) {
+		_pminfo_destroy_node((gpointer)link->data);
 		filter->list = g_slist_delete_link(filter->list, link);
+	}
 	filter->list = g_slist_append(filter->list, (gpointer)node);
 	return PMINFO_R_OK;
 
@@ -1761,8 +1963,10 @@ API int pkgmgrinfo_pkginfo_filter_add_string(pkgmgrinfo_pkginfo_filter_h handle,
 	/*If API is called multiple times for same property, we should override the previous values.
 	Last value set will be used for filtering.*/
 	link = g_slist_find_custom(filter->list, (gconstpointer)node, __compare_func);
-	if (link)
+	if (link) {
+		_pminfo_destroy_node((gpointer)link->data);
 		filter->list = g_slist_delete_link(filter->list, link);
+	}
 	filter->list = g_slist_append(filter->list, (gpointer)node);
 	return PMINFO_R_OK;
 
@@ -1785,22 +1989,23 @@ API int pkgmgrinfo_pkginfo_filter_count(pkgmgrinfo_pkginfo_filter_h handle, int 
 	char where[MAX_QUERY_LEN] = {'\0'};
 	GSList *list;
 
-	pkgmgr_pkginfo_x *node = NULL;
 	pkgmgr_pkginfo_x *pkginfo = NULL;
-	pkgmgr_pkginfo_x *list_pkginfo = NULL;
 	pkgmgrinfo_filter_x *filter = (pkgmgrinfo_filter_x*)handle;
+
+	GList *node = NULL;
+	GList *list_pkginfo = NULL;
 
 	sqlite3 *pkginfo_db = NULL;
 	sqlite3_stmt *stmt = NULL;
 
 
 	/*open db*/
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
-	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "db_util_open[%s] failed!", MANIFEST_DB);
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
+	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "_pminfo_db_open[%s] failed!", MANIFEST_DB);
 
 	/*Start constructing query*/
 	locale = __convert_system_locale_to_manifest_locale();
-	snprintf(query, MAX_QUERY_LEN - 1, FILTER_QUERY_LIST_PACKAGE, DEFAULT_LOCALE, locale);
+	sqlite3_snprintf(MAX_QUERY_LEN - 1, query, FILTER_QUERY_LIST_PACKAGE, DEFAULT_LOCALE, locale);
 
 	/*Get where clause*/
 	for (list = filter->list; list; list = g_slist_next(list)) {
@@ -1830,9 +2035,6 @@ API int pkgmgrinfo_pkginfo_filter_count(pkgmgrinfo_pkginfo_filter_h handle, int 
 	}
 	_LOGE("query = %s\n", query);
 
-	list_pkginfo = calloc(1, sizeof(pkgmgr_pkginfo_x));
-	tryvm_if(list_pkginfo == NULL, ret = PMINFO_R_ERROR, "Out of Memory!!!\n");
-
 	ret = sqlite3_prepare_v2(pkginfo_db, query, strlen(query), &stmt, NULL);
 	tryvm_if(ret != PMINFO_R_OK, ret = PMINFO_R_ERROR, "sqlite3_prepare_v2 failed[%s]\n", query);
 
@@ -1845,7 +2047,9 @@ API int pkgmgrinfo_pkginfo_filter_count(pkgmgrinfo_pkginfo_filter_h handle, int 
 
 			if (strlen(pre_pkgid) != 0) {
 				if (strcmp(pre_pkgid, pkgid) == 0) {
-					__update_localed_label_for_list(stmt, list_pkginfo);
+					node = g_list_last(list_pkginfo);
+					if (node)
+						__update_localed_label_for_list(stmt, (pkgmgr_pkginfo_x *)node->data);
 
 					memset(pre_pkgid, 0, MAX_QUERY_LEN);
 					strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
@@ -1859,16 +2063,14 @@ API int pkgmgrinfo_pkginfo_filter_count(pkgmgrinfo_pkginfo_filter_h handle, int 
 				strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
 			}
 
-			__get_pkginfo_for_list(stmt, list_pkginfo);
+			__get_pkginfo_for_list(stmt, &list_pkginfo);
 		} else {
 			break;
 		}
 	}
 
-	LISTHEAD(list_pkginfo, node);
-
-	for(node = node->next ; node ; node = node->next) {
-		pkginfo = node;
+	for(node = list_pkginfo; node ; node = node->next) {
+		pkginfo = (pkgmgr_pkginfo_x *)node->data;
 		ret = __pkginfo_check_installed_storage(pkginfo);
 		if(ret < 0)
 			continue;
@@ -1883,7 +2085,8 @@ catch:
 	sqlite3_finalize(stmt);
 	sqlite3_close(pkginfo_db);
 
-	__cleanup_list_pkginfo(list_pkginfo, node);
+	__cleanup_list_pkginfo(&list_pkginfo);
+	node = NULL;
 
 	return ret;
 }
@@ -1903,22 +2106,24 @@ API int pkgmgrinfo_pkginfo_filter_foreach_pkginfo(pkgmgrinfo_pkginfo_filter_h ha
 	char pkgid[MAX_QUERY_LEN] = {0,};
 	char pre_pkgid[MAX_QUERY_LEN] = {0,};
 
-	pkgmgr_pkginfo_x *node = NULL;
 	pkgmgr_pkginfo_x *pkginfo = NULL;
-	pkgmgr_pkginfo_x *list_pkginfo = NULL;
 	pkgmgrinfo_filter_x *filter = (pkgmgrinfo_filter_x*)handle;
+
+	GList *node = NULL;
+	GList *list_pkginfo = NULL;
 
 	sqlite3 *pkginfo_db = NULL;
 	sqlite3_stmt *stmt = NULL;
 
 	/*open db*/
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
-	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "db_util_open[%s] failed!", MANIFEST_DB);
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
+	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "_pminfo_db_open[%s] failed!", MANIFEST_DB);
 
 	/*Start constructing query*/
 	locale = __convert_system_locale_to_manifest_locale();
-	retvm_if(locale == NULL, PMINFO_R_ERROR, "locale is NULL");
-	snprintf(query, MAX_QUERY_LEN - 1, FILTER_QUERY_LIST_PACKAGE, DEFAULT_LOCALE, locale);
+	retvm_if(locale == NULL, PMINFO_R_ERROR, "convert system locale to manifest locale fail");
+
+	sqlite3_snprintf(MAX_QUERY_LEN - 1, query, FILTER_QUERY_LIST_PACKAGE, DEFAULT_LOCALE, locale);
 
 	/*Get where clause*/
 	for (list = filter->list; list; list = g_slist_next(list)) {
@@ -1950,9 +2155,6 @@ API int pkgmgrinfo_pkginfo_filter_foreach_pkginfo(pkgmgrinfo_pkginfo_filter_h ha
 	}
 	_LOGE("query = %s\n", query);
 
-	list_pkginfo = calloc(1, sizeof(pkgmgr_pkginfo_x));
-	tryvm_if(list_pkginfo == NULL, ret = PMINFO_R_ERROR, "Out of Memory!!!\n");
-
 	ret = sqlite3_prepare_v2(pkginfo_db, query, strlen(query), &stmt, NULL);
 	tryvm_if(ret != PMINFO_R_OK, ret = PMINFO_R_ERROR, "sqlite3_prepare_v2 failed[%s]\n", query);
 
@@ -1965,7 +2167,9 @@ API int pkgmgrinfo_pkginfo_filter_foreach_pkginfo(pkgmgrinfo_pkginfo_filter_h ha
 
 			if (strlen(pre_pkgid) != 0) {
 				if (strcmp(pre_pkgid, pkgid) == 0) {
-					__update_localed_label_for_list(stmt, list_pkginfo);
+					node = g_list_last(list_pkginfo);
+					if (node)
+						__update_localed_label_for_list(stmt, (pkgmgr_pkginfo_x *)node->data);
 
 					memset(pre_pkgid, 0, MAX_QUERY_LEN);
 					strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
@@ -1979,16 +2183,14 @@ API int pkgmgrinfo_pkginfo_filter_foreach_pkginfo(pkgmgrinfo_pkginfo_filter_h ha
 				strncpy(pre_pkgid, (const char *)sqlite3_column_text(stmt, 0), MAX_QUERY_LEN - 1);
 			}
 
-			__get_pkginfo_for_list(stmt, list_pkginfo);
+			__get_pkginfo_for_list(stmt, &list_pkginfo);
 		} else {
 			break;
 		}
 	}
 
-	LISTHEAD(list_pkginfo, node);
-
-	for(node = node->next ; node ; node = node->next) {
-		pkginfo = node;
+	for(node = list_pkginfo ; node ; node = node->next) {
+		pkginfo = (pkgmgr_pkginfo_x *)node->data;
 		pkginfo->locale = strdup(locale);
 
 		ret = __pkginfo_check_installed_storage(pkginfo);
@@ -1996,8 +2198,10 @@ API int pkgmgrinfo_pkginfo_filter_foreach_pkginfo(pkgmgrinfo_pkginfo_filter_h ha
 			continue;
 
 		ret = pkg_cb( (void *)pkginfo, user_data);
-		if(ret < 0)
+		if(ret < 0) {
+			_LOGE("callback is stopped.");
 			break;
+		}
 	}
 	ret = PMINFO_R_OK;
 
@@ -2005,7 +2209,9 @@ catch:
 	FREE_AND_NULL(locale);
 	sqlite3_finalize(stmt);
 	sqlite3_close(pkginfo_db);
-	__cleanup_list_pkginfo(list_pkginfo, node);
+
+	__cleanup_list_pkginfo(&list_pkginfo);
+	node = NULL;
 
 	return ret;
 }
@@ -2022,13 +2228,14 @@ API int pkgmgrinfo_pkginfo_privilege_filter_foreach(const char *privilege,
 	sqlite3 *pkginfo_db = NULL;
 	sqlite3_stmt *stmt = NULL;
 
-	pkgmgr_pkginfo_x *node = NULL;
 	pkgmgr_pkginfo_x *pkginfo = NULL;
-	pkgmgr_pkginfo_x *list_pkginfo = NULL;
+
+	GList *node = NULL;
+	GList *list_pkginfo = NULL;
 
 	/*open db*/
-	ret = db_util_open(MANIFEST_DB, &pkginfo_db, 0);
-	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "db_util_open[%s] failed!", MANIFEST_DB);
+	ret = _pminfo_db_open(MANIFEST_DB, &pkginfo_db);
+	retvm_if(ret != SQLITE_OK, PMINFO_R_ERROR, "_pminfo_db_open[%s] failed!", MANIFEST_DB);
 
 	/*Start constructing query*/
 	query = sqlite3_mprintf("select package_info.* from package_info LEFT OUTER JOIN package_privilege_info " \
@@ -2039,27 +2246,23 @@ API int pkgmgrinfo_pkginfo_privilege_filter_foreach(const char *privilege,
 	ret = sqlite3_prepare_v2(pkginfo_db, query, strlen(query), &stmt, NULL);
 	tryvm_if(ret != PMINFO_R_OK, ret = PMINFO_R_ERROR, "sqlite3_prepare_v2 failed[%s]\n", query);
 
-	/*calloc pkginfo_x*/
-	list_pkginfo = (pkgmgr_pkginfo_x *)calloc(1, sizeof(pkgmgr_pkginfo_x));
-	tryvm_if(list_pkginfo == NULL, ret = PMINFO_R_ERROR, "Out of Memory!!!\n");
-
 	/*step query*/
 	while(1) {
 		ret = sqlite3_step(stmt);
 		if(ret == SQLITE_ROW) {
-			__get_pkginfo_for_list(stmt, list_pkginfo);
+			__get_pkginfo_for_list(stmt, &list_pkginfo);
 		} else {
 			break;
 		}
 	}
 
-	LISTHEAD(list_pkginfo, node);
-
-	for(node = node->next; node ; node = node->next) {
-		pkginfo = node;
+	for(node = list_pkginfo; node ; node = node->next) {
+		pkginfo = (pkgmgr_pkginfo_x *)node->data;
 		ret = pkg_list_cb( (void *)pkginfo, user_data);
-		if(ret < 0)
+		if(ret < 0) {
+			_LOGE("callback is stopped.");
 			break;
+		}
 	}
 	ret = PMINFO_R_OK;
 
@@ -2067,8 +2270,101 @@ catch:
 	sqlite3_free(query);
 	sqlite3_finalize(stmt);
 	sqlite3_close(pkginfo_db);
+	__cleanup_list_pkginfo(&list_pkginfo);
+	node = NULL;
 
-	__cleanup_list_pkginfo(list_pkginfo, node);
+	return ret;
+}
 
+API int pkgmgrinfo_updateinfo_register(const char* updateinfo)
+{
+	retvm_if(updateinfo == NULL, PMINFO_R_EINVAL, "updateinfo is NULL");
+
+
+#if 0
+	int ret = 0;
+	ret = vconf_set_str(VCONFKEY_PKGMGR_UPDATE_INFO, updateinfo);
+	retvm_if(ret < 0, PMINFO_R_ERROR, "vconf_set_str(%s) fail", updateinfo);
+#endif
+
+	return PMINFO_R_OK;
+}
+
+API int pkgmgrinfo_updateinfo_check_update(const char* pkgid)
+{
+	retvm_if(pkgid == NULL, PMINFO_R_ERROR, "pkgid is NULL");
+
+	int ret = -1;
+#if 0
+	char *vconf_str = NULL;
+	char pkgid_is[PKG_STRING_LEN_MAX] = {0,};
+
+	vconf_str = vconf_get_str(VCONFKEY_PKGMGR_UPDATE_INFO);
+	if (vconf_str == NULL) {
+		return PMINFO_R_ERROR;
+	}
+
+	strncat(pkgid_is, pkgid, strlen(pkgid));
+	strncat(pkgid_is, ":", strlen(":"));
+
+	if (strstr(vconf_str, pkgid_is)) {
+		_LOGS("pkgid[%s] has update version", pkgid);
+		ret = PMINFO_R_OK;
+	} else {
+		ret = PMINFO_R_ERROR;
+	}
+
+	FREE_AND_NULL(vconf_str);
+#endif
+	return ret;
+}
+
+API int pkgmgrinfo_updateinfo_remove(const char* pkgid)
+{
+	retvm_if(pkgid == NULL, PMINFO_R_EINVAL, "pkgid is NULL");
+
+	int ret = 0;
+#if 0
+	int len = 0;
+	char *vconf_str = NULL;
+	char pkgid_is[PKG_STRING_LEN_MAX] = {0,};
+	char new_info[PKG_STRING_LEN_MAX] = {0,};
+
+	const char* head = NULL;
+	const char* tail = NULL;
+
+	vconf_str = vconf_get_str(VCONFKEY_PKGMGR_UPDATE_INFO);
+	if (vconf_str == NULL) {
+		return PMINFO_R_ERROR;
+	}
+
+	strncat(pkgid_is, ":", strlen(":"));
+	strncat(pkgid_is, pkgid, strlen(pkgid));
+	strncat(pkgid_is, ":", strlen(":"));
+	tryvm_if(strstr(vconf_str, pkgid_is) == NULL, ret = PMINFO_R_ERROR, "pkgid is already removed");
+
+	memset(pkgid_is, 0, PKG_STRING_LEN_MAX);
+	strncat(pkgid_is, pkgid, strlen(pkgid));
+	strncat(pkgid_is, ":", strlen(":"));
+
+	head = strstr(vconf_str, pkgid_is);
+	if (head != NULL) {
+		len = strlen(vconf_str) - strlen(head);
+		strncat(new_info, vconf_str, len);
+	}
+
+	tail = head + strlen(pkgid) + 1;
+	if (tail != NULL) {
+		strncat(new_info, tail, strlen(tail));
+	}
+
+	ret = vconf_set_str(VCONFKEY_PKGMGR_UPDATE_INFO, new_info);
+	tryvm_if(ret < 0, ret = PMINFO_R_ERROR, "vconf_set_str fail");
+#endif
+
+	ret = PMINFO_R_OK;
+
+//catch:
+	//FREE_AND_NULL(vconf_str);
 	return ret;
 }
